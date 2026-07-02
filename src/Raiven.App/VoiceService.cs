@@ -41,8 +41,10 @@ public sealed class VoiceService(RaivenConfig config)
                 FileLog.Info($"Loading Kokoro model (downloads ~320 MB on first ever run) at '{modelPath}'...");
                 try
                 {
-                    _tts = KokoroTTS.LoadModel();
-                    _voice = KokoroVoiceManager.GetVoice(config.Voice);
+                    var tts = KokoroTTS.LoadModel();
+                    var voice = KokoroVoiceManager.GetVoice(config.Voice);
+                    _tts = tts;
+                    _voice = voice;
                 }
                 finally
                 {

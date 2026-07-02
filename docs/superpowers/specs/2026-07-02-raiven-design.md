@@ -25,13 +25,13 @@ RAIVEN borrows the hook-driven, deterministic trigger mechanism from claude-code
 
 ## Architecture
 
-RAIVEN is a single C#/.NET Windows tray application that starts at login and runs continuously.
+RAIVEN is a single C#/.NET Windows tray application that starts at login and runs continuously. Internally it is built as **Core + Adapters**, so that today's single notification flow is one instance of a general pattern rather than a one-off: an inbound adapter turns something that happened into an event, Core routes the event to a service, and the service produces one or more outbound actions. This costs nothing extra to build for v1, but means the future capabilities in the [Roadmap](#roadmap) are additions to Core rather than rewrites of it.
 
-Claude Code's `Stop` hook (fires natively at the end of every turn) is configured with `type: "http"`, posting its event JSON directly to a RAIVEN-owned local HTTP endpoint bound to `127.0.0.1` only. No intermediate script is needed — this is a first-class, documented Claude Code hook type.
+- **Core** — an internal event pipeline (`Event in → handled by a service → Action(s) out`) plus a small session registry (`session_id → transcript_path, cwd, last-seen`) that outlives any single event.
+- **Inbound adapters** — things that feed typed events into Core. v1 ships exactly one: an HTTP listener bound to `127.0.0.1` that accepts a generic event envelope (`source`, `type`, `payload`), fed by Claude Code's `Stop` hook (configured with `type: "http"`, posting directly — no intermediate script needed, since `http` is a first-class documented Claude Code hook type).
+- **Outbound actions** — things Core can trigger. v1 ships: play chime, raise toast, summarize via Haiku, speak via Kokoro.
 
-On receiving a `Stop` event, RAIVEN immediately plays a chime and raises a Windows toast notification with a "Play summary" action, then returns HTTP 200 without blocking Claude Code. Nothing further happens unless the user clicks the toast.
-
-On click, RAIVEN reads the transcript referenced by the stored event, asks Claude Haiku (via the Anthropic API, using the user's existing API access) for a short narrative-style spoken summary, and synthesizes that text locally with Kokoro-82M via the [KokoroSharp](https://github.com/Lyrcaxis/KokoroSharp) NuGet package, then plays the audio.
+For v1 specifically: on a `Stop` event, Core plays a chime and raises a Windows toast with a "Play summary" action, then the adapter returns HTTP 200 without blocking Claude Code. Nothing further happens unless the user clicks the toast. On click, Core reads the transcript referenced by the registered session, asks Claude Haiku (via the Anthropic API, using the user's existing API access) for a short narrative-style spoken summary, and synthesizes that text locally with Kokoro-82M via the [KokoroSharp](https://github.com/Lyrcaxis/KokoroSharp) NuGet package, then plays the audio.
 
 Kokoro/TTS is local-only in all cases — this is a hard requirement, not configurable. Haiku is the only component that calls the network, and only in response to a click.
 
@@ -40,21 +40,22 @@ Kokoro/TTS is local-only in all cases — this is a hard requirement, not config
 | Component | Responsibility |
 |---|---|
 | Tray shell | System tray icon, right-click menu (pause notifications, quit, settings), start-at-login registration |
-| Local listener | Loopback-only HTTP server receiving `Stop` event payloads from Claude Code |
-| Notifier | Plays the chime, raises the Windows toast, tags/keys each by session ID so concurrent Claude Code sessions don't cross-talk |
-| Summarizer | On toast click: extracts the relevant slice of the referenced transcript, calls Claude Haiku for a short narrative summary |
-| Voice | Feeds the summary text to KokoroSharp (Kokoro-82M) and plays the resulting audio locally |
+| Local listener (inbound adapter) | Loopback-only HTTP server accepting a generic `{source, type, payload}` event envelope; v1's only registered source is Claude Code's `Stop` hook |
+| Session registry (Core) | Durable-for-the-process store of `session_id → transcript_path, cwd, last-seen`, populated by inbound events and read by any outbound action that needs session context |
+| Notifier (outbound action) | Plays the chime, raises the Windows toast, tags/keys each by session ID so concurrent Claude Code sessions don't cross-talk |
+| Summarizer (outbound action) | On toast click: extracts the relevant slice of the referenced transcript, calls Claude Haiku for a short narrative summary |
+| Voice (outbound action) | Feeds the summary text to KokoroSharp (Kokoro-82M) and plays the resulting audio locally |
 | Config | Local settings file: HTTP port, Kokoro voice selection, chime sound |
-| Hook snippet | One-time addition to the user's Claude Code settings registering the `Stop` hook against RAIVEN's endpoint |
+| Hook snippet | One-time addition to the user's Claude Code settings registering the `Stop` hook against RAIVEN's local listener |
 
 ## Data flow
 
-1. Claude Code fires `Stop` at the end of a turn → POSTs the event (session ID, transcript path, working directory) to RAIVEN.
-2. RAIVEN caches the event in memory, keyed by session ID, and immediately plays the chime + shows a toast ("Claude finished in \<folder>", with a "Play summary" button). RAIVEN responds 200 immediately; it never blocks Claude Code waiting on the user.
-3. If the user clicks "Play summary": RAIVEN looks up the cached event, pulls the relevant transcript slice, and asks Haiku for a 1–3 sentence narrative summary (e.g. "I fixed the login bug and all tests are passing now.").
-4. That summary is synthesized and spoken locally via Kokoro.
+1. Claude Code fires `Stop` at the end of a turn → the local listener adapter receives it and hands Core a typed event (session ID, transcript path, working directory).
+2. Core writes/updates the session registry entry for that session ID, and triggers the Notifier action: play the chime + show a toast ("Claude finished in \<folder>", with a "Play summary" button). RAIVEN responds 200 immediately; it never blocks Claude Code waiting on the user.
+3. If the user clicks "Play summary": Core looks up the session registry entry, triggers the Summarizer action, which pulls the relevant transcript slice and asks Haiku for a 1–3 sentence narrative summary (e.g. "I fixed the login bug and all tests are passing now.").
+4. Core triggers the Voice action: that summary is synthesized and spoken locally via Kokoro.
 5. If the toast is never clicked, no Haiku call and no audio are ever produced for that turn.
-6. If clicked after the cached event has expired or RAIVEN has restarted, RAIVEN shows a short "that session's details are no longer available" notification instead of failing silently.
+6. If clicked after the session registry entry has expired or RAIVEN has restarted, RAIVEN shows a short "that session's details are no longer available" notification instead of failing silently.
 
 ## Error handling
 
@@ -70,8 +71,13 @@ Personal tool — no CI investment. Verification is:
 - A smoke-test script that POSTs a synthetic `Stop`-shaped payload directly to the local endpoint, to verify chime → toast → summary → voice each work without needing a live Claude Code session.
 - A manual end-to-end pass with a real Claude Code session and the hook configured, confirming the full chime → toast → click → summary → voice path.
 
-## Open items for the future (explicitly out of scope for v1)
+## Roadmap (explicitly out of scope for v1)
 
-- Voice-activated confirmation ("say yes") via local speech-to-text, replacing or supplementing the toast button.
+RAIVEN's longer-term goal is a local event/control hub for AI-assisted work, with Claude Code as its first integration. None of the following is built in v1 — they're named here so the Core+Adapters architecture above is deliberately shaped to accept them as additions:
+
+- **Claude calls RAIVEN as tools.** RAIVEN also runs as an MCP server — a second inbound adapter alongside the HTTP listener. This lets Claude proactively call something like `raiven.speak(...)` or `raiven.ask(...)` mid-task, instead of RAIVEN only reacting after a `Stop` event.
+- **RAIVEN drives Claude Code sessions.** RAIVEN gains an outbound action that starts or resumes a Claude Code session with a new prompt (via `claude -p --resume <session_id>`, spawned as a subprocess). Constraint worth flagging now: there is no way to inject a prompt into a still-running interactive session's stdin — "driving" a session means starting a new turn via `--resume`, not talking into a live one. This is what would let a voice command ("Claude, add tests for that") become a new Claude Code turn.
+- **RAIVEN coordinates other tools/agents.** The event envelope (`source`, `type`, `payload`) and action model are intentionally not Claude-Code-specific, so other local tools/agents can register as additional inbound adapters or outbound action targets later, making RAIVEN a general local hub rather than a single-integration notifier.
+- Voice-activated confirmation ("say yes") via local speech-to-text, replacing or supplementing the toast button — this is what would carry a spoken "yes, and also add tests" into the session-driving capability above.
 - Filtering which turns notify (e.g. skip trivial replies).
 - Cross-platform support.

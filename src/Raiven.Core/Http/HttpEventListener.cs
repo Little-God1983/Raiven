@@ -35,6 +35,11 @@ public sealed class HttpEventListener(int port, Func<RaivenEvent, Task> onEvent)
             {
                 break;
             }
+            catch (Exception ex)
+            {
+                FileLog.Error("Accept loop failed unexpectedly; listener is no longer accepting events", ex);
+                break;
+            }
             _ = Task.Run(() => HandleRequestAsync(context));
         }
     }

@@ -1,16 +1,33 @@
+using Raiven.Core.Config;
+using Raiven.Core.Logging;
+
 namespace Raiven.App;
 
-static class Program
+internal static class Program
 {
-    /// <summary>
-    ///  The main entry point for the application.
-    /// </summary>
     [STAThread]
-    static void Main()
+    private static void Main(string[] args)
     {
-        // To customize application configuration such as set high DPI settings or default font,
-        // see https://aka.ms/applicationconfiguration.
-        ApplicationConfiguration.Initialize();
-        Application.Run(new Form1());
-    }    
+        FileLog.Configure(AppPaths.LogFile);
+        var config = RaivenConfig.LoadOrCreate(AppPaths.ConfigFile);
+
+        if (args.Contains("--test-toast"))
+        {
+            RunToastTest(config);
+            return;
+        }
+
+        // Tray mode arrives in a later task.
+        FileLog.Info("Tray mode not implemented yet.");
+    }
+
+    private static void RunToastTest(RaivenConfig config)
+    {
+        var toasts = new ToastService();
+        toasts.PlaySummaryRequested += id => FileLog.Info($"TEST: play summary requested for {id}");
+        ChimePlayer.Play(config);
+        toasts.ShowFinished("test-session-001", "RAIVEN");
+        FileLog.Info("Test toast shown; waiting 15s for clicks...");
+        Thread.Sleep(TimeSpan.FromSeconds(15));
+    }
 }

@@ -482,3 +482,7 @@ $RECYCLE.BIN/
 *.swp
 
 .superpowers/
+
+# Kokoro TTS model, downloaded at runtime by KokoroSharp into the working
+# directory the first time VoiceService.Speak() runs (~320 MB).
+kokoro.onnx

@@ -17,6 +17,12 @@ internal static class Program
             return;
         }
 
+        if (args.Contains("--test-voice"))
+        {
+            RunVoiceTest(config);
+            return;
+        }
+
         // Tray mode arrives in a later task.
         FileLog.Info("Tray mode not implemented yet.");
     }
@@ -29,5 +35,13 @@ internal static class Program
         toasts.ShowFinished("test-session-001", "RAIVEN");
         FileLog.Info("Test toast shown; waiting 15s for clicks...");
         Thread.Sleep(TimeSpan.FromSeconds(15));
+    }
+
+    private static void RunVoiceTest(RaivenConfig config)
+    {
+        var voice = new VoiceService(config);
+        FileLog.Info("Speaking test phrase...");
+        voice.Speak("RAIVEN online. All systems operational.");
+        Thread.Sleep(TimeSpan.FromSeconds(20)); // keep process alive while audio plays
     }
 }

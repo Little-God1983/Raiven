@@ -54,8 +54,9 @@ internal static class Program
         var toasts = new ToastService();
         var voice = new VoiceService(config);
 
-        // Summary pipeline is wired in the next task; log clicks for now.
-        toasts.PlaySummaryRequested += id => FileLog.Info($"Play summary requested for {id} (pipeline pending)");
+        var claude = new Raiven.Core.Summaries.AnthropicClaudeClient(config.Model);
+        var pipeline = new SummaryPipeline(registry, config, claude, toasts, voice);
+        toasts.PlaySummaryRequested += id => _ = Task.Run(() => pipeline.PlaySummaryAsync(id));
 
         Task HandleEvent(RaivenEvent evt)
         {

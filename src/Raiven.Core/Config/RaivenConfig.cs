@@ -14,6 +14,8 @@ public sealed class RaivenConfig
     public int SessionExpiryMinutes { get; init; } = 240;
     public string SummaryBackend { get; init; } = "cli"; // "cli" (Claude subscription via CLI) or "api" (pay-per-token Anthropic API)
     public string CliModelAlias { get; init; } = "haiku"; // CLI model alias: sonnet, opus, haiku, or fable
+    public bool AutoPlaySummary { get; init; } = true;
+    public int AutoPlayDelaySeconds { get; init; } = 5;
 
     public static RaivenConfig LoadOrCreate(string path)
     {

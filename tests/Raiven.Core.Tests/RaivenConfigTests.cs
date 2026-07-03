@@ -50,4 +50,26 @@ public class RaivenConfigTests
 
         Assert.Equal(9876, config.Port);
     }
+
+    [Fact]
+    public void LoadOrCreate_MissingFile_HasAutoPlayDefaults()
+    {
+        var config = RaivenConfig.LoadOrCreate(TempConfigPath());
+
+        Assert.True(config.AutoPlaySummary);
+        Assert.Equal(5, config.AutoPlayDelaySeconds);
+    }
+
+    [Fact]
+    public void LoadOrCreate_ExistingFile_ReadsAutoPlayValues()
+    {
+        var path = TempConfigPath();
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        File.WriteAllText(path, """{"AutoPlaySummary":false,"AutoPlayDelaySeconds":9}""");
+
+        var config = RaivenConfig.LoadOrCreate(path);
+
+        Assert.False(config.AutoPlaySummary);
+        Assert.Equal(9, config.AutoPlayDelaySeconds);
+    }
 }

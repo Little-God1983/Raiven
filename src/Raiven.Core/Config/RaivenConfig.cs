@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Raiven.Core.Logging;
 
 namespace Raiven.Core.Config;
 
@@ -6,16 +7,22 @@ public sealed class RaivenConfig
 {
     private static readonly JsonSerializerOptions Options = new() { WriteIndented = true };
 
-    public int Port { get; init; } = 9876;
-    public string Voice { get; init; } = "af_heart";
-    public string? ChimeWavPath { get; init; }
-    public string Model { get; init; } = "claude-haiku-4-5";
-    public int MaxTranscriptChars { get; init; } = 30000;
-    public int SessionExpiryMinutes { get; init; } = 240;
-    public string SummaryBackend { get; init; } = "cli"; // "cli" (Claude subscription via CLI) or "api" (pay-per-token Anthropic API)
-    public string CliModelAlias { get; init; } = "haiku"; // CLI model alias: sonnet, opus, haiku, or fable
-    public bool AutoPlaySummary { get; init; } = true;
-    public int AutoPlayDelaySeconds { get; init; } = 5;
+    public int Port { get; set; } = 9876;
+    public string Voice { get; set; } = "af_heart";
+    public string? ChimeWavPath { get; set; }
+    public string Model { get; set; } = "claude-haiku-4-5";
+    public int MaxTranscriptChars { get; set; } = 30000;
+    public int SessionExpiryMinutes { get; set; } = 240;
+    public string SummaryBackend { get; set; } = "cli"; // "cli" (Claude subscription via CLI) or "api" (pay-per-token Anthropic API)
+    public string CliModelAlias { get; set; } = "haiku"; // CLI model alias: sonnet, opus, haiku, or fable
+    public bool AutoPlaySummary { get; set; } = true;
+    public int AutoPlayDelaySeconds { get; set; } = 5;
+    public bool NotifyOnFinishedTurn { get; set; } = true;
+    public string FinishedTurnVoice { get; set; } = "summary"; // "summary" (Claude Haiku) or "message" (read last assistant message verbatim)
+    public int FinishedTurnWordLimit { get; set; } // spoken word cap for "message" mode; 0 = unlimited
+    public bool NotifyOnQuestion { get; set; } = true;
+    public string QuestionVoice { get; set; } = "announce"; // "announce", "message" (read the hook's message), or "summary" (Claude Haiku)
+    public int QuestionWordLimit { get; set; } // spoken word cap for "message" mode; 0 = unlimited
 
     public static RaivenConfig LoadOrCreate(string path)
     {
@@ -34,6 +41,19 @@ public sealed class RaivenConfig
         catch (JsonException)
         {
             return new RaivenConfig();
+        }
+    }
+
+    public void Save(string path)
+    {
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            File.WriteAllText(path, JsonSerializer.Serialize(this, Options));
+        }
+        catch (Exception ex)
+        {
+            FileLog.Error($"Could not save config to {path}", ex);
         }
     }
 }

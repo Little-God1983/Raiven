@@ -72,4 +72,35 @@ public class RaivenConfigTests
         Assert.False(config.AutoPlaySummary);
         Assert.Equal(9, config.AutoPlayDelaySeconds);
     }
+
+    [Fact]
+    public void LoadOrCreate_MissingFile_HasNotificationDefaults()
+    {
+        var config = RaivenConfig.LoadOrCreate(TempConfigPath());
+
+        Assert.True(config.NotifyOnFinishedTurn);
+        Assert.Equal("summary", config.FinishedTurnVoice);
+        Assert.Equal(0, config.FinishedTurnWordLimit);
+        Assert.True(config.NotifyOnQuestion);
+        Assert.Equal("announce", config.QuestionVoice);
+        Assert.Equal(0, config.QuestionWordLimit);
+    }
+
+    [Fact]
+    public void Save_ThenLoad_RoundTripsMutatedValues()
+    {
+        var path = TempConfigPath();
+        var config = RaivenConfig.LoadOrCreate(path);
+        config.NotifyOnQuestion = false;
+        config.QuestionVoice = "message";
+        config.QuestionWordLimit = 25;
+
+        config.Save(path);
+        var reloaded = RaivenConfig.LoadOrCreate(path);
+
+        Assert.False(reloaded.NotifyOnQuestion);
+        Assert.Equal("message", reloaded.QuestionVoice);
+        Assert.Equal(25, reloaded.QuestionWordLimit);
+        Assert.Equal(9876, reloaded.Port); // untouched keys survive the round trip
+    }
 }

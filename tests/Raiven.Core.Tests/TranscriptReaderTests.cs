@@ -152,4 +152,15 @@ public class TranscriptReaderTests
 
         Assert.Equal("Fix the login bug", TranscriptReader.ReadFirstPrompt(path));
     }
+
+    [Fact]
+    public void ReadFirstPrompt_SkipsBashModeRecords()
+    {
+        var path = WriteTranscript(
+            """{"type":"user","message":{"role":"user","content":"<bash-input>ls -la</bash-input>"}}""",
+            """{"type":"user","message":{"role":"user","content":"<bash-stdout>total 4</bash-stdout>"}}""",
+            """{"type":"user","message":{"role":"user","content":"Fix the login bug"}}""");
+
+        Assert.Equal("Fix the login bug", TranscriptReader.ReadFirstPrompt(path));
+    }
 }

@@ -14,7 +14,8 @@ public sealed class TrayContext : ApplicationContext
         SummaryHistory history,
         Action<SummaryHistoryEntry> replaySummary,
         Action testToast,
-        Action testVoice)
+        Action testVoice,
+        Action<bool>? onPauseChanged = null)
     {
         var menu = new ContextMenuStrip();
 
@@ -22,7 +23,11 @@ public sealed class TrayContext : ApplicationContext
         menu.Items.Add(new ToolStripSeparator());
 
         var pauseItem = new ToolStripMenuItem("Pause notifications") { CheckOnClick = true };
-        pauseItem.CheckedChanged += (_, _) => state.Paused = pauseItem.Checked;
+        pauseItem.CheckedChanged += (_, _) =>
+        {
+            state.Paused = pauseItem.Checked;
+            onPauseChanged?.Invoke(pauseItem.Checked);
+        };
 
         var startupItem = new ToolStripMenuItem("Start with Windows")
         {
@@ -77,7 +82,9 @@ public sealed class TrayContext : ApplicationContext
         foreach (var entry in entries)
         {
             var captured = entry;
-            var label = $"{captured.Headline} ({captured.Folder}, {captured.GeneratedAt.LocalDateTime:HH:mm})";
+            // Escape ampersands so headlines with '&' don't render as menu mnemonics.
+            var label = $"{captured.Headline} ({captured.Folder}, {captured.GeneratedAt.LocalDateTime:HH:mm})"
+                .Replace("&", "&&");
             parent.DropDownItems.Add(new ToolStripMenuItem(label, null, (_, _) => replaySummary(captured)));
         }
     }

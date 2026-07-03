@@ -48,11 +48,14 @@ public sealed class AutoPlayCountdown(TimeSpan total, TimeSpan tick) : IDisposab
     private async Task RunAsync(string sessionId, CancellationTokenSource cts)
     {
         var steps = Math.Max(1, (int)Math.Round(total.TotalMilliseconds / tick.TotalMilliseconds));
+        CancellationToken token;
+        try { token = cts.Token; }
+        catch (ObjectDisposedException) { return; }
         try
         {
             for (var i = 1; i <= steps; i++)
             {
-                await Task.Delay(tick, cts.Token).ConfigureAwait(false);
+                await Task.Delay(tick, token).ConfigureAwait(false);
                 Progress?.Invoke(sessionId, (double)i / steps);
             }
         }

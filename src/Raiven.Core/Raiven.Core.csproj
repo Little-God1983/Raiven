@@ -10,4 +10,8 @@
     <PackageReference Include="Anthropic" Version="12.35.0" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="Raiven.Core.Tests" />
+  </ItemGroup>
+
 </Project>

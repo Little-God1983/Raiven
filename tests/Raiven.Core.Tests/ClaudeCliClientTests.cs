@@ -26,6 +26,24 @@ public class ClaudeCliClientTests
         Assert.Throws<InvalidOperationException>(() => ClaudeCliClient.ExtractResultText("""{"result":"   "}"""));
     }
 
+    [Fact]
+    public void ResolveExecutablePath_FindsRealExecutableOnPath()
+    {
+        // "dotnet" is guaranteed to be on PATH in this test environment (it's how the
+        // test runner itself launched) and has a real .exe, unlike claude's .cmd shim.
+        var path = ClaudeCliClient.ResolveExecutablePath("dotnet");
+
+        Assert.True(File.Exists(path));
+        Assert.EndsWith("dotnet.exe", path, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void ResolveExecutablePath_UnknownCommand_Throws()
+    {
+        Assert.Throws<InvalidOperationException>(
+            () => ClaudeCliClient.ResolveExecutablePath("this-command-does-not-exist-anywhere-raiven"));
+    }
+
     [SkippableFact]
     public async Task CompleteAsync_LiveCall_ReturnsNonEmptyText()
     {

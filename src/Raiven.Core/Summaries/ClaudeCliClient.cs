@@ -8,9 +8,20 @@ public sealed class ClaudeCliClient(string modelAlias) : IClaudeClient
 {
     public async Task<string> CompleteAsync(string systemPrompt, string userContent, CancellationToken ct = default)
     {
+        string claudePath;
+        try
+        {
+            claudePath = ResolveExecutablePath("claude");
+        }
+        catch (InvalidOperationException)
+        {
+            throw new InvalidOperationException(
+                "Could not find the 'claude' CLI on PATH. Is Claude Code installed and on PATH?");
+        }
+
         var psi = new ProcessStartInfo
         {
-            FileName = "claude",
+            FileName = claudePath,
             RedirectStandardInput = true,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
@@ -82,6 +93,34 @@ public sealed class ClaudeCliClient(string modelAlias) : IClaudeClient
         await process.StandardInput.BaseStream.WriteAsync(bytes, ct);
         await process.StandardInput.BaseStream.FlushAsync(ct);
         process.StandardInput.Close();
+    }
+
+    internal static string ResolveExecutablePath(string command)
+    {
+        // Win32 CreateProcess (which Process.Start uses under UseShellExecute=false)
+        // does not do the PATHEXT-based extension search a shell prompt does — it
+        // needs the exact filename. Claude Code on Windows is an npm-installed
+        // .cmd/.ps1 shim, not a bare .exe, so a plain FileName = "claude" fails with
+        // "the system cannot find the file specified" even though `claude` runs fine
+        // from a terminal. Resolve the real file ourselves, honoring PATHEXT order,
+        // and hand Process.Start the exact resolved path.
+        var pathExt = (Environment.GetEnvironmentVariable("PATHEXT") ?? ".COM;.EXE;.BAT;.CMD")
+            .Split(';', StringSplitOptions.RemoveEmptyEntries);
+        var searchPaths = (Environment.GetEnvironmentVariable("PATH") ?? "")
+            .Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries);
+
+        foreach (var dir in searchPaths)
+        {
+            foreach (var ext in pathExt)
+            {
+                var candidate = Path.Combine(dir, command + ext);
+                if (File.Exists(candidate)) return candidate;
+            }
+            var bare = Path.Combine(dir, command);
+            if (File.Exists(bare)) return bare;
+        }
+
+        throw new InvalidOperationException($"Could not find '{command}' on PATH.");
     }
 
     public static string ExtractResultText(string stdoutJson)

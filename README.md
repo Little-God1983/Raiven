@@ -76,6 +76,11 @@ With RAIVEN running: `powershell -File scripts/send-test-event.ps1`
 - **App fails to start with a "Windows App Runtime" error**: install the
   Windows App Runtime -
   https://learn.microsoft.com/en-us/windows/apps/windows-app-sdk/downloads
+  If it's already installed and RAIVEN still fails at startup with a COM or
+  "class not registered" error, the install can be present but not correctly
+  registered - repair it with
+  `winget install --id Microsoft.WindowsAppRuntime.2.2 --force` (this exact
+  situation occurred during development).
 - **"Access denied" starting the listener**: rare on Win10/11 loopback; run
   `netsh http add urlacl url=http://127.0.0.1:9876/ user=%USERNAME%` once as
   admin, or change `Port`.

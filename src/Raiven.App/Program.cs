@@ -15,6 +15,23 @@ internal static class Program
         FileLog.Configure(AppPaths.LogFile);
         var config = RaivenConfig.LoadOrCreate(AppPaths.ConfigFile);
 
+        try
+        {
+            Run(args, config);
+        }
+        catch (Exception ex)
+        {
+            FileLog.Error("RAIVEN failed to start", ex);
+            MessageBox.Show(
+                $"RAIVEN failed to start:\n\n{ex.Message}\n\nIf this mentions a COM or class-not-registered error, repair the Windows App Runtime:\nwinget install --id Microsoft.WindowsAppRuntime.2.2 --force\n\nDetails are in the log: {AppPaths.LogFile}",
+                "RAIVEN",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Error);
+        }
+    }
+
+    private static void Run(string[] args, RaivenConfig config)
+    {
         if (args.Contains("--test-toast"))
         {
             RunToastTest(config);
@@ -111,10 +128,10 @@ internal static class Program
 
     private static void RunToastTest(RaivenConfig config)
     {
-        var toasts = new AppSdkNotifier();
-        toasts.PlaySummaryRequested += id => FileLog.Info($"TEST: play summary requested for {id}");
+        var notifier = new AppSdkNotifier();
+        notifier.PlaySummaryRequested += id => FileLog.Info($"TEST: play summary requested for {id}");
         ChimePlayer.Play(config);
-        toasts.ShowFinished("test-session-001", "RAIVEN");
+        notifier.ShowFinished("test-session-001", "RAIVEN");
         FileLog.Info("Test toast shown; waiting 15s for clicks...");
         Thread.Sleep(TimeSpan.FromSeconds(15));
     }

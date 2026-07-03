@@ -12,6 +12,8 @@ public sealed class RaivenConfig
     public string Model { get; init; } = "claude-haiku-4-5";
     public int MaxTranscriptChars { get; init; } = 30000;
     public int SessionExpiryMinutes { get; init; } = 240;
+    public string SummaryBackend { get; init; } = "cli"; // "cli" (Claude subscription via CLI) or "api" (pay-per-token Anthropic API)
+    public string CliModelAlias { get; init; } = "haiku"; // CLI model alias: sonnet, opus, haiku, or fable
 
     public static RaivenConfig LoadOrCreate(string path)
     {

@@ -12,8 +12,9 @@ Kokoro-82M voice.
 Claude Code's `Stop` hook POSTs the turn's metadata to a loopback-only HTTP
 listener (`http://127.0.0.1:9876/`). RAIVEN chimes and toasts immediately.
 Only when you click the toast does it read the transcript, call Claude Haiku
-(the only network call, using your existing Anthropic credentials), and speak
-the summary via KokoroSharp - TTS never leaves your machine.
+(the only network call, using your Claude subscription via the `claude` CLI
+by default), and speak the summary via KokoroSharp - TTS never leaves your
+machine.
 
 ## Setup
 
@@ -27,10 +28,13 @@ the summary via KokoroSharp - TTS never leaves your machine.
    `%USERPROFILE%\.claude\settings.json` (create the `hooks` section if it
    doesn't exist). Restart any running Claude Code sessions.
 
-3. **Anthropic credentials**: RAIVEN uses the same resolution as the official
-   SDK - `ANTHROPIC_API_KEY` env var, `ANTHROPIC_AUTH_TOKEN`, or an
-   `ant auth login` profile. Without credentials, notifications still work;
-   only "Play summary" fails (with an error toast).
+3. **Anthropic credentials**: by default RAIVEN uses your Claude Code
+   subscription login (`claude /login`) via the `claude` CLI - no API key
+   needed. Set `SummaryBackend: "api"` in config and export
+   `ANTHROPIC_API_KEY` only if you want pay-per-token API billing instead.
+   Without either, notifications still work; only "Play summary" fails
+   (with an error toast) - RAIVEN never silently falls back from `cli` to
+   `api` to avoid surprise charges.
 
 4. Optional: tray menu -> "Start with Windows".
 
@@ -48,9 +52,11 @@ Open data folder * Quit
 | `Port` | `9876` | Loopback listener port (keep in sync with the hook URL) |
 | `Voice` | `af_heart` | Kokoro voice name (e.g. `am_michael` for a male voice) |
 | `ChimeWavPath` | `null` | Custom chime WAV; default is the system Asterisk sound |
-| `Model` | `claude-haiku-4-5` | Model used for summaries |
+| `Model` | `claude-haiku-4-5` | Model used for summaries (when `SummaryBackend` is `api`) |
 | `MaxTranscriptChars` | `30000` | Max transcript characters sent for summarizing |
 | `SessionExpiryMinutes` | `240` | How long a finished session stays summarizable |
+| `SummaryBackend` | `cli` | `cli` uses your Claude subscription via the `claude` CLI (no per-token cost); `api` uses the Anthropic API directly (pay-per-token, needs `ANTHROPIC_API_KEY`) |
+| `CliModelAlias` | `haiku` | CLI model alias used for summaries when `SummaryBackend` is `cli` - one of `sonnet`, `opus`, `haiku`, `fable` |
 
 Logs: `%APPDATA%\Raiven\logs\raiven.log`.
 
@@ -66,6 +72,9 @@ With RAIVEN running: `powershell -File scripts/send-test-event.ps1`
   admin, or change `Port`.
 - **Port in use**: change `Port` in config.json AND in the hook snippet.
 - **Summary fails**: usually missing Anthropic credentials - see Setup step 3.
+- **Summary fails with "Could not launch the claude CLI"**: make sure Claude
+  Code is installed and `claude` is on PATH, and that you're logged in
+  (`claude /login`).
 
 ## Roadmap
 

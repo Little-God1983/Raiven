@@ -54,7 +54,9 @@ internal static class Program
         var toasts = new ToastService();
         var voice = new VoiceService(config);
 
-        var claude = new Raiven.Core.Summaries.AnthropicClaudeClient(config.Model);
+        Raiven.Core.Summaries.IClaudeClient claude = config.SummaryBackend.Equals("api", StringComparison.OrdinalIgnoreCase)
+            ? new Raiven.Core.Summaries.AnthropicClaudeClient(config.Model)
+            : new Raiven.Core.Summaries.ClaudeCliClient(config.CliModelAlias);
         var pipeline = new SummaryPipeline(registry, config, claude, toasts, voice);
         toasts.PlaySummaryRequested += id => _ = Task.Run(() => pipeline.PlaySummaryAsync(id));
 

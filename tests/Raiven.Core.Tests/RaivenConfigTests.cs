@@ -21,6 +21,8 @@ public class RaivenConfigTests
         Assert.Equal(30000, config.MaxTranscriptChars);
         Assert.Equal(240, config.SessionExpiryMinutes);
         Assert.Null(config.ChimeWavPath);
+        Assert.Equal("cli", config.SummaryBackend);
+        Assert.Equal("haiku", config.CliModelAlias);
     }
 
     [Fact]

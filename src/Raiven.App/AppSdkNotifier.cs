@@ -110,6 +110,24 @@ public sealed class AppSdkNotifier : INotifier
         }
     }
 
+    public void ShowQuestion(string folderName, string? headline, string message)
+    {
+        try
+        {
+            var builder = new AppNotificationBuilder()
+                .AddText("Claude Code has a question")
+                .AddText(headline ?? folderName);
+            if (!string.IsNullOrWhiteSpace(message))
+                builder.AddText(message);
+            TrySetLogo(builder);
+            AppNotificationManager.Default.Show(builder.BuildNotification());
+        }
+        catch (Exception ex)
+        {
+            FileLog.Error("Showing question toast failed", ex);
+        }
+    }
+
     public void UpdateCountdownProgress(string sessionId, double fraction)
     {
         try

@@ -14,6 +14,9 @@ public interface INotifier
     /// <summary>Finished-turn toast with an auto-play progress bar and Play now / Abort buttons.</summary>
     void ShowFinishedCountdown(string sessionId, string folderName, string? headline, int totalSeconds);
 
+    /// <summary>Toast for a Claude Code question / attention request. No actions; informational only.</summary>
+    void ShowQuestion(string folderName, string? headline, string message);
+
     /// <summary>Advance the countdown toast's progress bar (fraction 0..1). Safe to call for a dismissed toast.</summary>
     void UpdateCountdownProgress(string sessionId, double fraction);
 

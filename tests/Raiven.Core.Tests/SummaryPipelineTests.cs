@@ -14,8 +14,10 @@ public class SummaryPipelineTests
         public event Action<string>? AbortRequested;
         public List<string> Errors { get; } = [];
         public List<(string SessionId, string Folder)> Finished { get; } = [];
+        public List<(string Folder, string? Headline, string Message)> Questions { get; } = [];
         public void ShowFinished(string sessionId, string folderName, string? headline) => Finished.Add((sessionId, folderName));
         public void ShowFinishedCountdown(string sessionId, string folderName, string? headline, int totalSeconds) => Finished.Add((sessionId, folderName));
+        public void ShowQuestion(string folderName, string? headline, string message) => Questions.Add((folderName, headline, message));
         public void ShowError(string message) => Errors.Add(message);
         public void UpdateCountdownProgress(string sessionId, double fraction) { }
         public void RemoveNotification(string sessionId) { }

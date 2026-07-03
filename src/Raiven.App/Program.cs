@@ -3,6 +3,7 @@ using Raiven.Core.Events;
 using Raiven.Core.Http;
 using Raiven.Core.Logging;
 using Raiven.Core.Notifications;
+using Raiven.Core.Questions;
 using Raiven.Core.Sessions;
 using Raiven.Core.Summaries;
 using Raiven.Core.Transcripts;
@@ -86,6 +87,7 @@ internal static class Program
             : new Raiven.Core.Summaries.ClaudeCliClient(config.CliModelAlias);
         var history = Raiven.Core.Summaries.SummaryHistory.Load(AppPaths.HistoryFile);
         var pipeline = new SummaryPipeline(registry, config, claude, notifier, voice, history);
+        var questions = new QuestionPipeline(config, claude, voice);
 
         var delaySeconds = Math.Max(1, config.AutoPlayDelaySeconds);
         using var countdown = new AutoPlayCountdown(
@@ -134,7 +136,7 @@ internal static class Program
             {
                 registry.Upsert(stop.SessionId, stop.TranscriptPath, stop.Cwd, DateTimeOffset.Now);
                 FileLog.Info($"Stop event for session {stop.SessionId} in {stop.Cwd}");
-                if (!state.Paused)
+                if (!state.Paused && config.NotifyOnFinishedTurn)
                 {
                     ChimePlayer.Play(config);
                     var folder = Path.GetFileName(stop.Cwd.TrimEnd('\\', '/'));
@@ -155,6 +157,21 @@ internal static class Program
                     {
                         notifier.ShowFinished(stop.SessionId, folderName, headline);
                     }
+                }
+            }
+            else if (EventParser.TryParseClaudeNotification(evt, out var question))
+            {
+                FileLog.Info($"Notification event for session {question.SessionId}: [{question.NotificationType ?? "unknown"}] {question.Message}");
+                if (QuestionPipeline.IsQuestion(question.NotificationType) && config.NotifyOnQuestion && !state.Paused)
+                {
+                    ChimePlayer.Play(config);
+                    var folder = Path.GetFileName(question.Cwd.TrimEnd('\\', '/'));
+                    var folderName = folder.Length > 0 ? folder : question.Cwd;
+                    string? headline = null;
+                    try { headline = TranscriptReader.ReadFirstPrompt(question.TranscriptPath); }
+                    catch (Exception ex) { FileLog.Error("Could not read chat headline", ex); }
+                    notifier.ShowQuestion(folderName, headline, question.Message);
+                    _ = Task.Run(() => questions.AnnounceAsync(question));
                 }
             }
             else

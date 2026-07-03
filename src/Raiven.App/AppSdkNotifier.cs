@@ -149,25 +149,26 @@ public sealed class AppSdkNotifier : INotifier
 
     public void ShowError(string message)
     {
-        var notification = new AppNotificationBuilder()
-            .AddText("RAIVEN")
-            .AddText(message)
-            .BuildNotification();
+        try
+        {
+            var notification = new AppNotificationBuilder()
+                .AddText("RAIVEN")
+                .AddText(message)
+                .BuildNotification();
 
-        AppNotificationManager.Default.Show(notification);
+            AppNotificationManager.Default.Show(notification);
+        }
+        catch (Exception ex)
+        {
+            FileLog.Error("Showing error toast failed", ex);
+        }
     }
 
     private static void AddHeadline(AppNotificationBuilder builder, string folderName, string? headline)
     {
         if (headline is not null)
-        {
             builder.AddText(headline);
-            builder.AddText($"Claude finished in {folderName}");
-        }
-        else
-        {
-            builder.AddText($"Claude finished in {folderName}");
-        }
+        builder.AddText($"Claude finished in {folderName}");
     }
 
     private static void TrySetLogo(AppNotificationBuilder builder)

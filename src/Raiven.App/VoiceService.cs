@@ -2,10 +2,11 @@ using KokoroSharp;
 using KokoroSharp.Core;
 using Raiven.Core.Config;
 using Raiven.Core.Logging;
+using Raiven.Core.Voice;
 
 namespace Raiven.App;
 
-public sealed class VoiceService(RaivenConfig config)
+public sealed class VoiceService(RaivenConfig config) : IVoice
 {
     private readonly Lock _lock = new();
     private KokoroTTS? _tts;

@@ -1,9 +1,10 @@
 using Microsoft.Toolkit.Uwp.Notifications;
 using Raiven.Core.Logging;
+using Raiven.Core.Notifications;
 
 namespace Raiven.App;
 
-public sealed class ToastService
+public sealed class ToastService : INotifier
 {
     public event Action<string>? PlaySummaryRequested;
 

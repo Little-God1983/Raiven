@@ -1,17 +1,18 @@
 using Raiven.Core.Config;
 using Raiven.Core.Logging;
+using Raiven.Core.Notifications;
 using Raiven.Core.Sessions;
-using Raiven.Core.Summaries;
 using Raiven.Core.Transcripts;
+using Raiven.Core.Voice;
 
-namespace Raiven.App;
+namespace Raiven.Core.Summaries;
 
 public sealed class SummaryPipeline(
     SessionRegistry registry,
     RaivenConfig config,
     IClaudeClient claude,
-    ToastService toasts,
-    VoiceService voice)
+    INotifier notifier,
+    IVoice voice)
 {
     private readonly SummaryService _summaries = new(claude);
 
@@ -21,7 +22,7 @@ public sealed class SummaryPipeline(
         {
             if (!registry.TryGet(sessionId, DateTimeOffset.Now, out var info))
             {
-                toasts.ShowError("That session's details are no longer available.");
+                notifier.ShowError("That session's details are no longer available.");
                 return;
             }
 
@@ -36,7 +37,7 @@ public sealed class SummaryPipeline(
         catch (Exception ex)
         {
             FileLog.Error($"Summary failed for session {sessionId}", ex);
-            toasts.ShowError("Couldn't get the summary - check the RAIVEN log for details.");
+            notifier.ShowError("Couldn't get the summary - check the RAIVEN log for details.");
         }
     }
 }

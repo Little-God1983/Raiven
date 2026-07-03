@@ -3,6 +3,7 @@ using Raiven.Core.Events;
 using Raiven.Core.Http;
 using Raiven.Core.Logging;
 using Raiven.Core.Sessions;
+using Raiven.Core.Summaries;
 
 namespace Raiven.App;
 

@@ -7,6 +7,12 @@ chime and a toast notification - click "Play summary" and RAIVEN asks Claude
 Haiku for a short spoken-style summary and reads it aloud with a fully local
 Kokoro-82M voice.
 
+Notifications use the Windows App SDK (`Microsoft.Windows.AppNotifications`),
+so the toast header shows "RAIVEN" with the raven icon (pulled straight from
+the exe's own version info and embedded icon - no AUMID or shortcut needed),
+and finished-turn toasts stay on screen for about 25 seconds instead of the
+usual ~7.
+
 ## How it works
 
 Claude Code's `Stop` hook POSTs the turn's metadata to a loopback-only HTTP
@@ -67,6 +73,9 @@ With RAIVEN running: `powershell -File scripts/send-test-event.ps1`
 ## Troubleshooting
 
 - **No toast/chime**: is RAIVEN running? Is the hook registered? Check the log.
+- **App fails to start with a "Windows App Runtime" error**: install the
+  Windows App Runtime -
+  https://learn.microsoft.com/en-us/windows/apps/windows-app-sdk/downloads
 - **"Access denied" starting the listener**: rare on Win10/11 loopback; run
   `netsh http add urlacl url=http://127.0.0.1:9876/ user=%USERNAME%` once as
   admin, or change `Port`.

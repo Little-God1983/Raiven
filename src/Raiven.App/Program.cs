@@ -35,10 +35,11 @@ internal static class Program
             return;
         }
 
-        if (args.Any(a => a.Contains("-ToastActivated")))
+        var activatedArgs = Microsoft.Windows.AppLifecycle.AppInstance.GetCurrent().GetActivatedEventArgs();
+        if (activatedArgs.Kind == Microsoft.Windows.AppLifecycle.ExtendedActivationKind.AppNotification)
         {
-            // Clicked a toast from a previous run; nothing to summarize anymore.
-            new ToastService().ShowError("RAIVEN wasn't running - that session's summary is no longer available.");
+            // Toast clicked from a previous run; the in-memory session registry is gone.
+            new AppSdkNotifier().ShowError("RAIVEN wasn't running - that session's summary is no longer available.");
             Thread.Sleep(TimeSpan.FromSeconds(3));
             return;
         }
@@ -52,14 +53,14 @@ internal static class Program
 
         var state = new AppState();
         var registry = new SessionRegistry(TimeSpan.FromMinutes(config.SessionExpiryMinutes));
-        var toasts = new ToastService();
+        var notifier = new AppSdkNotifier();
         var voice = new VoiceService(config);
 
         Raiven.Core.Summaries.IClaudeClient claude = config.SummaryBackend.Equals("api", StringComparison.OrdinalIgnoreCase)
             ? new Raiven.Core.Summaries.AnthropicClaudeClient(config.Model)
             : new Raiven.Core.Summaries.ClaudeCliClient(config.CliModelAlias);
-        var pipeline = new SummaryPipeline(registry, config, claude, toasts, voice);
-        toasts.PlaySummaryRequested += id => _ = Task.Run(() => pipeline.PlaySummaryAsync(id));
+        var pipeline = new SummaryPipeline(registry, config, claude, notifier, voice);
+        notifier.PlaySummaryRequested += id => _ = Task.Run(() => pipeline.PlaySummaryAsync(id));
 
         Task HandleEvent(RaivenEvent evt)
         {
@@ -71,7 +72,7 @@ internal static class Program
                 {
                     ChimePlayer.Play(config);
                     var folder = Path.GetFileName(stop.Cwd.TrimEnd('\\', '/'));
-                    toasts.ShowFinished(stop.SessionId, folder.Length > 0 ? folder : stop.Cwd);
+                    notifier.ShowFinished(stop.SessionId, folder.Length > 0 ? folder : stop.Cwd);
                 }
             }
             else
@@ -90,7 +91,7 @@ internal static class Program
         catch (Exception ex)
         {
             FileLog.Error($"Could not start listener on port {config.Port}", ex);
-            toasts.ShowError($"RAIVEN couldn't listen on port {config.Port}. Is another instance or app using it?");
+            notifier.ShowError($"RAIVEN couldn't listen on port {config.Port}. Is another instance or app using it?");
             return;
         }
 
@@ -98,7 +99,7 @@ internal static class Program
         {
             Application.Run(new TrayContext(
                 state,
-                testToast: () => { ChimePlayer.Play(config); toasts.ShowFinished("test-session-001", "RAIVEN"); },
+                testToast: () => { ChimePlayer.Play(config); notifier.ShowFinished("test-session-001", "RAIVEN"); },
                 testVoice: () => Task.Run(() => voice.Speak("RAIVEN online. All systems operational."))));
         }
         finally
@@ -110,7 +111,7 @@ internal static class Program
 
     private static void RunToastTest(RaivenConfig config)
     {
-        var toasts = new ToastService();
+        var toasts = new AppSdkNotifier();
         toasts.PlaySummaryRequested += id => FileLog.Info($"TEST: play summary requested for {id}");
         ChimePlayer.Play(config);
         toasts.ShowFinished("test-session-001", "RAIVEN");

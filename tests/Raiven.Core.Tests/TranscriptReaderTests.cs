@@ -93,4 +93,52 @@ public class TranscriptReaderTests
         Assert.Throws<FileNotFoundException>(
             () => TranscriptReader.ReadLastTurn(Path.Combine(Path.GetTempPath(), "raiven-does-not-exist.jsonl")));
     }
+
+    [Fact]
+    public void ReadFirstPrompt_ReturnsFirstUserPrompt()
+    {
+        var path = WriteTranscript(
+            """{"type":"user","message":{"role":"user","content":"Fix the login bug"}}""",
+            """{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Done."}]}}""",
+            """{"type":"user","message":{"role":"user","content":"Now add tests"}}""");
+
+        Assert.Equal("Fix the login bug", TranscriptReader.ReadFirstPrompt(path));
+    }
+
+    [Fact]
+    public void ReadFirstPrompt_SkipsMetaAndToolResultLines()
+    {
+        var path = WriteTranscript(
+            """{"type":"queue-operation","operation":"enqueue"}""",
+            """{"type":"user","isMeta":true,"message":{"role":"user","content":"meta noise"}}""",
+            """{"type":"user","message":{"role":"user","content":[{"type":"tool_result","content":"tool output"}]}}""",
+            """{"type":"user","message":{"role":"user","content":"The real prompt"}}""");
+
+        Assert.Equal("The real prompt", TranscriptReader.ReadFirstPrompt(path));
+    }
+
+    [Fact]
+    public void ReadFirstPrompt_TruncatesAndFlattensNewlines()
+    {
+        var longPrompt = "I want you to extend the software\nby adding auto play summary and lots more text beyond sixty characters";
+        var serialized = System.Text.Json.JsonSerializer.Serialize(longPrompt);
+        var json = "{\"type\":\"user\",\"message\":{\"role\":\"user\",\"content\":" + serialized + "}}";
+        var path = WriteTranscript(json);
+
+        var result = TranscriptReader.ReadFirstPrompt(path);
+
+        Assert.NotNull(result);
+        Assert.True(result!.Length <= 61); // 60 chars + ellipsis
+        Assert.EndsWith("…", result);
+        Assert.DoesNotContain("\n", result);
+    }
+
+    [Fact]
+    public void ReadFirstPrompt_MissingFileOrNoPrompt_ReturnsNull()
+    {
+        Assert.Null(TranscriptReader.ReadFirstPrompt(Path.Combine(Path.GetTempPath(), "raiven-nope.jsonl")));
+
+        var emptyish = WriteTranscript("""{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"hi"}]}}""");
+        Assert.Null(TranscriptReader.ReadFirstPrompt(emptyish));
+    }
 }

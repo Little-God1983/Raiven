@@ -111,6 +111,40 @@ public static class TranscriptReader
         return false;
     }
 
+    /// <summary>
+    /// Returns the chat's first user prompt as a single-line headline, truncated to
+    /// <paramref name="maxChars"/> with an ellipsis; null when the file is missing or
+    /// contains no user prompt. Stops reading at the first match.
+    /// </summary>
+    public static string? ReadFirstPrompt(string transcriptPath, int maxChars = 60)
+    {
+        if (!File.Exists(transcriptPath))
+            return null;
+
+        foreach (var line in File.ReadLines(transcriptPath))
+        {
+            if (string.IsNullOrWhiteSpace(line)) continue;
+            JsonDocument doc;
+            try { doc = JsonDocument.Parse(line); }
+            catch (JsonException) { continue; }
+
+            using (doc)
+            {
+                var root = doc.RootElement;
+                if (root.ValueKind != JsonValueKind.Object) continue;
+                if (!root.TryGetProperty("type", out var typeProp) || typeProp.ValueKind != JsonValueKind.String) continue;
+                if (typeProp.GetString() != "user") continue;
+                if (!TryExtractPrompt(root, out var prompt)) continue;
+
+                var headline = prompt.ReplaceLineEndings(" ").Trim();
+                if (headline.Length == 0) continue;
+                return headline.Length <= maxChars ? headline : headline[..maxChars].TrimEnd() + "…";
+            }
+        }
+
+        return null;
+    }
+
     private static (List<string> Texts, List<string> Tools) ExtractAssistant(JsonElement root)
     {
         var texts = new List<string>();

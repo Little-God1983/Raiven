@@ -49,51 +49,65 @@ public sealed class AppSdkNotifier : INotifier
 
     public void ShowFinished(string sessionId, string folderName, string? headline)
     {
-        var builder = new AppNotificationBuilder()
-            .AddArgument("action", "playSummary")
-            .AddArgument("sessionId", sessionId);
-        AddHeadline(builder, folderName, headline);
-        builder
-            .AddText("Click to hear a summary.")
-            .AddButton(new AppNotificationButton("Play summary")
+        try
+        {
+            var builder = new AppNotificationBuilder()
                 .AddArgument("action", "playSummary")
-                .AddArgument("sessionId", sessionId))
-            .SetDuration(AppNotificationDuration.Long);
-        TrySetLogo(builder);
+                .AddArgument("sessionId", sessionId);
+            AddHeadline(builder, folderName, headline);
+            builder
+                .AddText("Click to hear a summary.")
+                .AddButton(new AppNotificationButton("Play summary")
+                    .AddArgument("action", "playSummary")
+                    .AddArgument("sessionId", sessionId))
+                .SetDuration(AppNotificationDuration.Long);
+            TrySetLogo(builder);
 
-        var notification = builder.BuildNotification();
-        notification.Tag = sessionId;
-        AppNotificationManager.Default.Show(notification);
+            var notification = builder.BuildNotification();
+            notification.Tag = sessionId;
+            AppNotificationManager.Default.Show(notification);
+        }
+        catch (Exception ex)
+        {
+            FileLog.Error($"Showing finished toast failed for {sessionId}", ex);
+        }
     }
 
     public void ShowFinishedCountdown(string sessionId, string folderName, string? headline, int totalSeconds)
     {
-        var builder = new AppNotificationBuilder()
-            .AddArgument("action", "playNow")
-            .AddArgument("sessionId", sessionId);
-        AddHeadline(builder, folderName, headline);
-        builder
-            .AddProgressBar(new AppNotificationProgressBar()
-                .BindValue()
-                .BindStatus())
-            .AddButton(new AppNotificationButton("Play now")
-                .AddArgument("action", "playNow")
-                .AddArgument("sessionId", sessionId))
-            .AddButton(new AppNotificationButton("Abort")
-                .AddArgument("action", "abort")
-                .AddArgument("sessionId", sessionId))
-            .SetDuration(AppNotificationDuration.Long);
-        TrySetLogo(builder);
-
-        var notification = builder.BuildNotification();
-        notification.Tag = sessionId;
-        notification.Progress = new AppNotificationProgressData(sequenceNumber: 1)
+        try
         {
-            Value = 0,
-            Status = $"Auto-playing in {totalSeconds}s…",
-        };
-        lock (_sequenceLock) _progressSequences[sessionId] = 1;
-        AppNotificationManager.Default.Show(notification);
+            var builder = new AppNotificationBuilder()
+                .AddArgument("action", "playNow")
+                .AddArgument("sessionId", sessionId);
+            AddHeadline(builder, folderName, headline);
+            builder
+                .AddProgressBar(new AppNotificationProgressBar()
+                    .BindValue()
+                    .BindStatus())
+                .AddButton(new AppNotificationButton("Play now")
+                    .AddArgument("action", "playNow")
+                    .AddArgument("sessionId", sessionId))
+                .AddButton(new AppNotificationButton("Abort")
+                    .AddArgument("action", "abort")
+                    .AddArgument("sessionId", sessionId))
+                .SetDuration(AppNotificationDuration.Long);
+            TrySetLogo(builder);
+
+            var notification = builder.BuildNotification();
+            notification.Tag = sessionId;
+            notification.Progress = new AppNotificationProgressData(sequenceNumber: 1)
+            {
+                Value = 0,
+                Status = $"Auto-playing in {totalSeconds}s…",
+            };
+            lock (_sequenceLock) _progressSequences[sessionId] = 1;
+            AppNotificationManager.Default.Show(notification);
+        }
+        catch (Exception ex)
+        {
+            FileLog.Error($"Showing countdown toast failed for {sessionId}", ex);
+        }
     }
 
     public void UpdateCountdownProgress(string sessionId, double fraction)

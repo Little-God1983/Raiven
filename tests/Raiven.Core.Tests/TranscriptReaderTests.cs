@@ -141,4 +141,15 @@ public class TranscriptReaderTests
         var emptyish = WriteTranscript("""{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"hi"}]}}""");
         Assert.Null(TranscriptReader.ReadFirstPrompt(emptyish));
     }
+
+    [Fact]
+    public void ReadFirstPrompt_SkipsSlashCommandRecords()
+    {
+        var path = WriteTranscript(
+            """{"type":"user","message":{"role":"user","content":"<command-name>/model</command-name>\n<command-message>model</command-message>"}}""",
+            """{"type":"user","message":{"role":"user","content":"<local-command-stdout>Set model</local-command-stdout>"}}""",
+            """{"type":"user","message":{"role":"user","content":"Fix the login bug"}}""");
+
+        Assert.Equal("Fix the login bug", TranscriptReader.ReadFirstPrompt(path));
+    }
 }

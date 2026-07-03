@@ -138,6 +138,12 @@ public static class TranscriptReader
 
                 var headline = prompt.ReplaceLineEndings(" ").Trim();
                 if (headline.Length == 0) continue;
+                // Slash-command records are stored as user lines of metadata XML
+                // (<command-name>..., <local-command-stdout>...); they are not the
+                // chat's real opening prompt.
+                if (headline.StartsWith("<command-", StringComparison.Ordinal) ||
+                    headline.StartsWith("<local-command-", StringComparison.Ordinal))
+                    continue;
                 return headline.Length <= maxChars ? headline : headline[..maxChars].TrimEnd() + "…";
             }
         }

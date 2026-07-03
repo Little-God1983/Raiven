@@ -30,12 +30,12 @@ public sealed class QuestionPipeline(RaivenConfig config, IClaudeClient claude, 
 
     public async Task AnnounceAsync(ClaudeNotificationEvent evt)
     {
-        var folder = Path.GetFileName(evt.Cwd.TrimEnd('\\', '/'));
-        if (folder.Length == 0) folder = evt.Cwd;
-        var announceLine = $"Claude Code has a question in {folder}.";
-
+        var announceLine = "Claude Code has a question.";
         try
         {
+            var folder = Path.GetFileName(evt.Cwd.TrimEnd('\\', '/'));
+            if (folder.Length == 0) folder = evt.Cwd;
+            announceLine = $"Claude Code has a question in {folder}.";
             switch (config.QuestionVoice.ToLowerInvariant())
             {
                 case "message" when !string.IsNullOrWhiteSpace(evt.Message):

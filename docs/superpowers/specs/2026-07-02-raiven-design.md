@@ -81,3 +81,5 @@ RAIVEN's longer-term goal is a local event/control hub for AI-assisted work, wit
 - Voice-activated confirmation ("say yes") via local speech-to-text, replacing or supplementing the toast button — this is what would carry a spoken "yes, and also add tests" into the session-driving capability above.
 - Filtering which turns notify (e.g. skip trivial replies).
 - Cross-platform support.
+
+Design update 2026-07-03: SummaryPipeline's IClaudeClient now defaults to ClaudeCliClient (shells to 'claude -p', subscription billing via Claude Code CLI /login), with AnthropicClaudeClient (pay-per-token API) as opt-in via config.SummaryBackend='api'. No silent fallback on CLI failure by user's explicit choice - CLI errors surface as toast.

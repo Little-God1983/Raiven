@@ -1,4 +1,5 @@
 using Raiven.Core.Logging;
+using Raiven.Core.Summaries;
 
 namespace Raiven.App;
 
@@ -8,7 +9,12 @@ public sealed class TrayContext : ApplicationContext
 
     private readonly NotifyIcon _icon;
 
-    public TrayContext(AppState state, Action testToast, Action testVoice)
+    public TrayContext(
+        AppState state,
+        SummaryHistory history,
+        Action<SummaryHistoryEntry> replaySummary,
+        Action testToast,
+        Action testVoice)
     {
         var menu = new ContextMenuStrip();
 
@@ -25,7 +31,12 @@ public sealed class TrayContext : ApplicationContext
         };
         startupItem.CheckedChanged += (_, _) => StartupRegistration.SetEnabled(startupItem.Checked);
 
+        var recentItem = new ToolStripMenuItem("Recent summaries");
+        menu.Opening += (_, _) => RebuildRecentSummaries(recentItem, history, replaySummary);
+        RebuildRecentSummaries(recentItem, history, replaySummary);
+
         menu.Items.Add(pauseItem);
+        menu.Items.Add(recentItem);
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("Test notification", null, (_, _) => testToast());
         menu.Items.Add("Test voice", null, (_, _) => testVoice());
@@ -50,6 +61,25 @@ public sealed class TrayContext : ApplicationContext
         _icon.Visible = false;
         _icon.Dispose();
         base.ExitThreadCore();
+    }
+
+    private static void RebuildRecentSummaries(
+        ToolStripMenuItem parent, SummaryHistory history, Action<SummaryHistoryEntry> replaySummary)
+    {
+        parent.DropDownItems.Clear();
+        var entries = history.Entries;
+        if (entries.Count == 0)
+        {
+            parent.DropDownItems.Add(new ToolStripMenuItem("(none yet)") { Enabled = false });
+            return;
+        }
+
+        foreach (var entry in entries)
+        {
+            var captured = entry;
+            var label = $"{captured.Headline} ({captured.Folder}, {captured.GeneratedAt.LocalDateTime:HH:mm})";
+            parent.DropDownItems.Add(new ToolStripMenuItem(label, null, (_, _) => replaySummary(captured)));
+        }
     }
 
     private static ToolStripControlHost CreateHeaderItem(ContextMenuStrip owner)

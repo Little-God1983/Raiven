@@ -2,8 +2,10 @@ using Raiven.Core.Config;
 using Raiven.Core.Events;
 using Raiven.Core.Http;
 using Raiven.Core.Logging;
+using Raiven.Core.Notifications;
 using Raiven.Core.Sessions;
 using Raiven.Core.Summaries;
+using Raiven.Core.Transcripts;
 
 namespace Raiven.App;
 
@@ -56,6 +58,12 @@ internal static class Program
         if (activatedArgs.Kind == Microsoft.Windows.AppLifecycle.ExtendedActivationKind.AppNotification)
         {
             // Toast clicked from a previous run; the in-memory session registry is gone.
+            if (activatedArgs.Data is Microsoft.Windows.AppNotifications.AppNotificationActivatedEventArgs toast &&
+                toast.Arguments.TryGetValue("action", out var act) && act == "abort")
+            {
+                FileLog.Info("Stale toast aborted; nothing to do.");
+                return;
+            }
             new AppSdkNotifier().ShowError("RAIVEN wasn't running - that session's summary is no longer available.");
             Thread.Sleep(TimeSpan.FromSeconds(3));
             return;
@@ -76,8 +84,28 @@ internal static class Program
         Raiven.Core.Summaries.IClaudeClient claude = config.SummaryBackend.Equals("api", StringComparison.OrdinalIgnoreCase)
             ? new Raiven.Core.Summaries.AnthropicClaudeClient(config.Model)
             : new Raiven.Core.Summaries.ClaudeCliClient(config.CliModelAlias);
-        var pipeline = new SummaryPipeline(registry, config, claude, notifier, voice);
-        notifier.PlaySummaryRequested += id => _ = Task.Run(() => pipeline.PlaySummaryAsync(id));
+        var history = Raiven.Core.Summaries.SummaryHistory.Load(AppPaths.HistoryFile);
+        var pipeline = new SummaryPipeline(registry, config, claude, notifier, voice, history);
+
+        using var countdown = new AutoPlayCountdown(
+            TimeSpan.FromSeconds(Math.Max(1, config.AutoPlayDelaySeconds)),
+            TimeSpan.FromMilliseconds(500));
+        countdown.Progress += (id, fraction) => notifier.UpdateCountdownProgress(id, fraction);
+        countdown.Expired += id =>
+        {
+            notifier.RemoveNotification(id);
+            _ = Task.Run(() => pipeline.PlaySummaryAsync(id));
+        };
+        notifier.PlaySummaryRequested += id =>
+        {
+            countdown.Cancel(id);
+            _ = Task.Run(() => pipeline.PlaySummaryAsync(id));
+        };
+        notifier.AbortRequested += id =>
+        {
+            countdown.Cancel(id);
+            FileLog.Info($"Auto-play aborted for {id}");
+        };
 
         Task HandleEvent(RaivenEvent evt)
         {
@@ -89,7 +117,20 @@ internal static class Program
                 {
                     ChimePlayer.Play(config);
                     var folder = Path.GetFileName(stop.Cwd.TrimEnd('\\', '/'));
-                    notifier.ShowFinished(stop.SessionId, folder.Length > 0 ? folder : stop.Cwd);
+                    var folderName = folder.Length > 0 ? folder : stop.Cwd;
+                    string? headline = null;
+                    try { headline = TranscriptReader.ReadFirstPrompt(stop.TranscriptPath); }
+                    catch (Exception ex) { FileLog.Error("Could not read chat headline", ex); }
+
+                    if (config.AutoPlaySummary)
+                    {
+                        notifier.ShowFinishedCountdown(stop.SessionId, folderName, headline, config.AutoPlayDelaySeconds);
+                        countdown.Start(stop.SessionId);
+                    }
+                    else
+                    {
+                        notifier.ShowFinished(stop.SessionId, folderName, headline);
+                    }
                 }
             }
             else
@@ -116,7 +157,9 @@ internal static class Program
         {
             Application.Run(new TrayContext(
                 state,
-                testToast: () => { ChimePlayer.Play(config); notifier.ShowFinished("test-session-001", "RAIVEN"); },
+                history,
+                replaySummary: entry => Task.Run(() => voice.Speak(entry.SummaryText)),
+                testToast: () => { ChimePlayer.Play(config); notifier.ShowFinished("test-session-001", "RAIVEN", "This is a test notification"); },
                 testVoice: () => Task.Run(() => voice.Speak("RAIVEN online. All systems operational."))));
         }
         finally
@@ -129,11 +172,17 @@ internal static class Program
     private static void RunToastTest(RaivenConfig config)
     {
         var notifier = new AppSdkNotifier();
-        notifier.PlaySummaryRequested += id => FileLog.Info($"TEST: play summary requested for {id}");
+        notifier.PlaySummaryRequested += id => FileLog.Info($"TEST: play now requested for {id}");
+        notifier.AbortRequested += id => FileLog.Info($"TEST: abort requested for {id}");
         ChimePlayer.Play(config);
-        notifier.ShowFinished("test-session-001", "RAIVEN");
-        FileLog.Info("Test toast shown; waiting 15s for clicks...");
-        Thread.Sleep(TimeSpan.FromSeconds(15));
+        notifier.ShowFinishedCountdown("test-session-001", "RAIVEN", "Testing the countdown toast", 5);
+        for (var step = 1; step <= 10; step++)
+        {
+            Thread.Sleep(500);
+            notifier.UpdateCountdownProgress("test-session-001", step / 10.0);
+        }
+        FileLog.Info("Countdown complete; waiting 10s for clicks...");
+        Thread.Sleep(TimeSpan.FromSeconds(10));
     }
 
     private static void RunVoiceTest(RaivenConfig config)

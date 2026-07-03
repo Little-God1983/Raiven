@@ -143,6 +143,22 @@ whole chime -> toast -> click -> summary -> voice path on demand.
 | `SessionExpiryMinutes` | `240` | How long a finished session stays summarizable |
 | `SummaryBackend` | `cli` | `cli` uses your Claude subscription via the `claude` CLI (no per-token cost); `api` uses the Anthropic API directly (pay-per-token, needs `ANTHROPIC_API_KEY`) |
 | `CliModelAlias` | `haiku` | CLI model alias used for summaries when `SummaryBackend` is `cli` - one of `sonnet`, `opus`, `haiku`, `fable` |
+| `AutoPlaySummary` | `true` | When on, a finished-turn toast starts a countdown and auto-plays the summary after `AutoPlayDelaySeconds`; the toast carries **Play now** and **Abort** buttons. Set `false` for the old click-to-play behavior |
+| `AutoPlayDelaySeconds` | `5` | Seconds the auto-play countdown runs before speaking (clamped to a minimum of 1) |
+
+### Auto-play, Play now/Abort, and Recent summaries
+
+By default (`AutoPlaySummary: true`) each finished-turn toast shows a countdown
+progress bar and speaks the summary automatically after `AutoPlayDelaySeconds`
+(default 5). While it counts down you can click **Play now** to speak it
+immediately or **Abort** to skip it; pausing notifications during a countdown
+also cancels the pending auto-play. Upgrading users get auto-play **on** by
+default - if you prefer the click-to-play toast, set `"AutoPlaySummary": false`
+in `config.json`.
+
+The tray menu's **Recent summaries** submenu keeps the last 5 spoken summaries
+and replays any of them straight from cache - no new Claude call. This history
+is persisted to `%APPDATA%\Raiven\history.json`.
 
 Logs: `%APPDATA%\Raiven\logs\raiven.log` - check here first whenever
 something doesn't work as expected.

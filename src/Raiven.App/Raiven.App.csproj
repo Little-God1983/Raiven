@@ -18,6 +18,18 @@
     </None>
   </ItemGroup>
 
+  <!-- KokoroSharp ships its voices/espeak data via a package target that copies
+       AfterTargets="Build" into the build output only - dotnet publish never runs
+       it, which shipped a mute RAIVEN. Carry those folders into the publish dir. -->
+  <Target Name="PublishKokoroAssets" AfterTargets="Publish">
+    <ItemGroup>
+      <KokoroVoices Include="$(OutputPath)voices\**\*" />
+      <KokoroEspeak Include="$(OutputPath)espeak\**\*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(KokoroVoices)" DestinationFolder="$(PublishDir)voices\%(RecursiveDir)" />
+    <Copy SourceFiles="@(KokoroEspeak)" DestinationFolder="$(PublishDir)espeak\%(RecursiveDir)" />
+  </Target>
+
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net10.0-windows10.0.17763.0</TargetFramework>

@@ -83,3 +83,5 @@ RAIVEN's longer-term goal is a local event/control hub for AI-assisted work, wit
 - Cross-platform support.
 
 Design update 2026-07-03: SummaryPipeline's IClaudeClient now defaults to ClaudeCliClient (shells to 'claude -p', subscription billing via Claude Code CLI /login), with AnthropicClaudeClient (pay-per-token API) as opt-in via config.SummaryBackend='api'. No silent fallback on CLI failure by user's explicit choice - CLI errors surface as toast.
+
+Design update 2026-07-03 (2): Notification/voice actions now sit behind OS-neutral Core interfaces (INotifier, IVoice); SummaryPipeline moved into Raiven.Core for future cross-platform ports. Windows toasts migrated from Microsoft.Toolkit.Uwp.Notifications to Windows App SDK AppNotifications (proper RAIVEN display name from exe metadata, exe-embedded raven icon, ~25s long-duration finished-toasts). Startup failures now log + show an actionable dialog instead of dying silently.

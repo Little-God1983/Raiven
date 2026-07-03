@@ -44,6 +44,18 @@ public class ClaudeCliClientTests
             () => ClaudeCliClient.ResolveExecutablePath("this-command-does-not-exist-anywhere-raiven"));
     }
 
+    [Fact]
+    public void BuildArguments_LoadsNoSettingSources_SoUserHooksCannotFire()
+    {
+        var args = ClaudeCliClient.BuildArguments("system prompt", "haiku");
+
+        var idx = args.ToList().IndexOf("--setting-sources");
+        Assert.True(idx >= 0, "args must contain --setting-sources");
+        Assert.Equal("", args[idx + 1]);
+        Assert.Contains("--max-turns", args);
+        Assert.Equal("haiku", args[args.ToList().IndexOf("--model") + 1]);
+    }
+
     [SkippableFact]
     public async Task CompleteAsync_LiveCall_ReturnsNonEmptyText()
     {

@@ -29,18 +29,8 @@ public sealed class ClaudeCliClient(string modelAlias) : IClaudeClient
             UseShellExecute = false,
             CreateNoWindow = true,
         };
-        psi.ArgumentList.Add("-p");
-        psi.ArgumentList.Add("Respond now, based on the content provided on standard input.");
-        psi.ArgumentList.Add("--system-prompt");
-        psi.ArgumentList.Add(systemPrompt);
-        psi.ArgumentList.Add("--model");
-        psi.ArgumentList.Add(modelAlias);
-        psi.ArgumentList.Add("--output-format");
-        psi.ArgumentList.Add("json");
-        psi.ArgumentList.Add("--max-turns");
-        psi.ArgumentList.Add("1");
-        psi.ArgumentList.Add("--tools");
-        psi.ArgumentList.Add("");
+        foreach (var arg in BuildArguments(systemPrompt, modelAlias))
+            psi.ArgumentList.Add(arg);
 
         // Force subscription billing: if ANTHROPIC_API_KEY/ANTHROPIC_AUTH_TOKEN are set in
         // RAIVEN's own environment, Claude Code prefers them over the /login subscription
@@ -86,6 +76,28 @@ public sealed class ClaudeCliClient(string modelAlias) : IClaudeClient
 
         return ExtractResultText(stdout);
     }
+
+    internal static IReadOnlyList<string> BuildArguments(string systemPrompt, string modelAlias) =>
+    [
+        "-p",
+        "Respond now, based on the content provided on standard input.",
+        "--system-prompt",
+        systemPrompt,
+        "--model",
+        modelAlias,
+        "--output-format",
+        "json",
+        "--max-turns",
+        "1",
+        "--tools",
+        "",
+        // Load no settings files (user/project/local): RAIVEN's summarizer must run
+        // hermetically, or the user's own Stop hook fires on this subprocess and
+        // every summary triggers another finished-turn event - an infinite loop
+        // once auto-play is enabled. Subscription OAuth auth is unaffected.
+        "--setting-sources",
+        "",
+    ];
 
     private static async Task WriteStdinAsync(Process process, string userContent, CancellationToken ct)
     {

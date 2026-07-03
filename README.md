@@ -81,6 +81,13 @@ finishes - it's a one-time, global change that applies to every Claude Code
 session on the machine, in any editor or terminal. Restart any Claude Code
 sessions that were already running so they pick up the change.
 
+The snippet registers **two** hooks: `Stop` (finished-turn notifications)
+and `Notification` (question notifications - Claude Code waiting for
+permission or input). If you set RAIVEN up before question notifications
+existed, re-merge the updated `docs/hook-snippet.json` to add the
+`Notification` entry alongside your existing `Stop` entry - otherwise you'll
+keep getting finished-turn notifications but never question notifications.
+
 ### 4. Confirm Claude credentials are in place
 
 By default RAIVEN summarizes via your Claude subscription through the
@@ -145,6 +152,12 @@ whole chime -> toast -> click -> summary -> voice path on demand.
 | `CliModelAlias` | `haiku` | CLI model alias used for summaries when `SummaryBackend` is `cli` - one of `sonnet`, `opus`, `haiku`, `fable` |
 | `AutoPlaySummary` | `true` | When on, a finished-turn toast starts a countdown and auto-plays the summary after `AutoPlayDelaySeconds`; the toast carries **Play now** and **Abort** buttons. Set `false` for the old click-to-play behavior |
 | `AutoPlayDelaySeconds` | `5` | Seconds the auto-play countdown runs before speaking (clamped to a minimum of 1) |
+| `NotifyOnFinishedTurn` | `true` | Master on/off switch for finished-turn chime/toast/voice; also toggled by the tray **Settings** submenu |
+| `FinishedTurnVoice` | `summary` | `summary` asks Claude Haiku for a short spoken summary; `message` reads the last assistant message verbatim (no Claude call), capped by `FinishedTurnWordLimit`. Unknown values behave as `summary` |
+| `FinishedTurnWordLimit` | `0` | Spoken word cap for `FinishedTurnVoice: message` mode; `0` = unlimited. config.json-only - no tray control |
+| `NotifyOnQuestion` | `true` | Master on/off switch for question notifications (Claude Code waiting on a permission prompt or input); also toggled by the tray **Settings** submenu |
+| `QuestionVoice` | `announce` | `announce` speaks a fixed "Claude Code has a question in {folder}." line; `message` reads the hook's message text verbatim, capped by `QuestionWordLimit`; `summary` asks Claude Haiku to phrase what's being asked. Unknown values (and `message` with an empty message) behave as `announce` |
+| `QuestionWordLimit` | `0` | Spoken word cap for `QuestionVoice: message` mode; `0` = unlimited. config.json-only - no tray control |
 
 ### Auto-play, Play now/Abort, and Recent summaries
 
@@ -159,6 +172,24 @@ in `config.json`.
 The tray menu's **Recent summaries** submenu keeps the last 5 spoken summaries
 and replays any of them straight from cache - no new Claude call. This history
 is persisted to `%APPDATA%\Raiven\history.json`.
+
+### Question notifications
+
+When Claude Code has a question - a permission prompt, or it's waiting on
+input - RAIVEN chimes, shows a toast, and speaks immediately (no countdown,
+no history entry - unlike finished-turn summaries).
+
+Both finished-turn and question notifications can be switched on/off, and
+their voice mode changed, from the tray's **Settings** submenu, which saves
+every change straight to `config.json`. The spoken word limits
+(`FinishedTurnWordLimit`, `QuestionWordLimit`) are config.json-only - there's
+no tray control for them.
+
+Finished-turn summaries are cached per session (see above): if you change
+`FinishedTurnVoice` after a turn's summary has already been generated,
+replaying that same turn - via **Play now** on a lingering toast, or via
+**Recent summaries** - still speaks the original cached text. The new mode
+takes effect starting with that session's next finished turn.
 
 Logs: `%APPDATA%\Raiven\logs\raiven.log` - check here first whenever
 something doesn't work as expected.

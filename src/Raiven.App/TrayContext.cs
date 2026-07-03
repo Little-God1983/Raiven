@@ -1,3 +1,4 @@
+using Raiven.Core.Config;
 using Raiven.Core.Logging;
 using Raiven.Core.Summaries;
 
@@ -11,6 +12,8 @@ public sealed class TrayContext : ApplicationContext
 
     public TrayContext(
         AppState state,
+        RaivenConfig config,
+        Action saveConfig,
         SummaryHistory history,
         Action<SummaryHistoryEntry> replaySummary,
         Action testToast,
@@ -40,8 +43,11 @@ public sealed class TrayContext : ApplicationContext
         menu.Opening += (_, _) => RebuildRecentSummaries(recentItem, history, replaySummary);
         RebuildRecentSummaries(recentItem, history, replaySummary);
 
+        var settingsItem = BuildSettingsMenu(config, saveConfig);
+
         menu.Items.Add(pauseItem);
         menu.Items.Add(recentItem);
+        menu.Items.Add(settingsItem);
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("Test notification", null, (_, _) => testToast());
         menu.Items.Add("Test voice", null, (_, _) => testVoice());
@@ -87,6 +93,68 @@ public sealed class TrayContext : ApplicationContext
                 .Replace("&", "&&");
             parent.DropDownItems.Add(new ToolStripMenuItem(label, null, (_, _) => replaySummary(captured)));
         }
+    }
+
+    private static ToolStripMenuItem BuildSettingsMenu(RaivenConfig config, Action saveConfig)
+    {
+        var settings = new ToolStripMenuItem("Settings");
+
+        var notifyTurns = new ToolStripMenuItem("Notify on finished turns")
+        {
+            CheckOnClick = true,
+            Checked = config.NotifyOnFinishedTurn,
+        };
+        notifyTurns.CheckedChanged += (_, _) => { config.NotifyOnFinishedTurn = notifyTurns.Checked; saveConfig(); };
+
+        var notifyQuestions = new ToolStripMenuItem("Notify on questions")
+        {
+            CheckOnClick = true,
+            Checked = config.NotifyOnQuestion,
+        };
+        notifyQuestions.CheckedChanged += (_, _) => { config.NotifyOnQuestion = notifyQuestions.Checked; saveConfig(); };
+
+        var turnVoice = new ToolStripMenuItem("Finished turn voice");
+        AddRadioGroup(turnVoice,
+            [("Haiku summary", "summary"), ("Read last message", "message")],
+            config.FinishedTurnVoice,
+            value => { config.FinishedTurnVoice = value; saveConfig(); });
+
+        var questionVoice = new ToolStripMenuItem("Question voice");
+        AddRadioGroup(questionVoice,
+            [("Announce only", "announce"), ("Read message", "message"), ("Haiku summary", "summary")],
+            config.QuestionVoice,
+            value => { config.QuestionVoice = value; saveConfig(); });
+
+        settings.DropDownItems.Add(notifyTurns);
+        settings.DropDownItems.Add(notifyQuestions);
+        settings.DropDownItems.Add(new ToolStripSeparator());
+        settings.DropDownItems.Add(turnVoice);
+        settings.DropDownItems.Add(questionVoice);
+        return settings;
+    }
+
+    private static void AddRadioGroup(
+        ToolStripMenuItem parent, (string Label, string Value)[] options, string current, Action<string> apply)
+    {
+        foreach (var (label, value) in options)
+        {
+            var item = new ToolStripMenuItem(label)
+            {
+                Checked = string.Equals(current, value, StringComparison.OrdinalIgnoreCase),
+            };
+            item.Click += (_, _) =>
+            {
+                foreach (var sibling in parent.DropDownItems.OfType<ToolStripMenuItem>())
+                    sibling.Checked = false;
+                item.Checked = true;
+                apply(value);
+            };
+            parent.DropDownItems.Add(item);
+        }
+
+        // Unknown config value: show the default (first) option as selected.
+        if (!parent.DropDownItems.OfType<ToolStripMenuItem>().Any(i => i.Checked))
+            ((ToolStripMenuItem)parent.DropDownItems[0]).Checked = true;
     }
 
     private static ToolStripControlHost CreateHeaderItem(ContextMenuStrip owner)

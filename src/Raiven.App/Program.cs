@@ -198,6 +198,8 @@ internal static class Program
         {
             Application.Run(new TrayContext(
                 state,
+                config,
+                saveConfig: () => config.Save(AppPaths.ConfigFile),
                 history,
                 replaySummary: entry => Task.Run(() => voice.Speak(entry.SummaryText)),
                 testToast: () => { ChimePlayer.Play(config); notifier.ShowFinished("test-session-001", "RAIVEN", "This is a test notification"); },

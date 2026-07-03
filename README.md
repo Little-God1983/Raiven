@@ -1,6 +1,10 @@
-# RAIVEN
+<p align="center">
+  <img src="Images/Raiven-logo.png" alt="RAIVEN logo" width="220">
+</p>
 
-**R**easoning **A**gent for **I**ntelligent **V**irtual **E**xecution and **N**avigation
+<h1 align="center">RAIVEN</h1>
+
+<p align="center"><strong>R</strong>easoning <strong>A</strong>gent for <strong>I</strong>ntelligent <strong>V</strong>irtual <strong>E</strong>xecution and <strong>N</strong>avigation</p>
 
 A Windows tray companion for Claude Code: when Claude finishes a turn you get a
 chime and a toast notification - click "Play summary" and RAIVEN asks Claude
@@ -22,32 +26,108 @@ Only when you click the toast does it read the transcript, call Claude Haiku
 by default), and speak the summary via KokoroSharp - TTS never leaves your
 machine.
 
-## Setup
+## Installation
 
-1. **Build & run** (requires .NET 10 SDK on Windows):
+### Prerequisites
 
-       dotnet run --project src/Raiven.App
+- Windows 10 (build 17763+) or Windows 11.
+- [.NET 10 SDK](https://dotnet.microsoft.com/download) - `dotnet --version` should print `10.x`.
+- [Claude Code](https://code.claude.com) installed and on `PATH`, logged in
+  via `claude /login` (your Claude Pro/Max/Team subscription). This is the
+  default credential RAIVEN uses for summaries - no separate API key needed.
+  (An `ANTHROPIC_API_KEY` works too as an opt-in alternative; see
+  [Configuration](#configuration).)
+- The Windows App Runtime is required for notifications. Most current
+  Windows 11 installs already have it; if RAIVEN fails to start, see
+  [Troubleshooting](#troubleshooting).
+- `git`, to clone the repo.
 
-   A tray icon appears. First voice use downloads the Kokoro model (~320 MB).
+### 1. Get the code
 
-2. **Register the hook**: merge `docs/hook-snippet.json` into
-   `%USERPROFILE%\.claude\settings.json` (create the `hooks` section if it
-   doesn't exist). Restart any running Claude Code sessions.
+```
+git clone https://github.com/Little-God1983/Raiven.git
+cd Raiven
+```
 
-3. **Anthropic credentials**: by default RAIVEN uses your Claude Code
-   subscription login (`claude /login`) via the `claude` CLI - no API key
-   needed. Set `SummaryBackend: "api"` in config and export
-   `ANTHROPIC_API_KEY` only if you want pay-per-token API billing instead.
-   Without either, notifications still work; only "Play summary" fails
-   (with an error toast) - RAIVEN never silently falls back from `cli` to
-   `api` to avoid surprise charges.
+### 2. Build and install it somewhere permanent
 
-4. Optional: tray menu -> "Start with Windows".
+`dotnet run` (used during development) builds into a `bin\Debug\...` folder
+that can be wiped by a rebuild - fine for trying it out, not for something
+you want running every day. For a real install, publish a Release build into
+a stable folder instead:
 
-## Tray menu
+```
+dotnet publish src/Raiven.App -c Release -r win-x64 --self-contained false -o "%LOCALAPPDATA%\Programs\RAIVEN"
+```
+
+This produces `Raiven.App.exe` and everything it needs in
+`%LOCALAPPDATA%\Programs\RAIVEN`. Run it once to confirm the tray icon
+appears (right-click it to see the menu):
+
+```
+"%LOCALAPPDATA%\Programs\RAIVEN\Raiven.App.exe"
+```
+
+(If you'd rather just try RAIVEN without a permanent install, skip this step
+and use `dotnet run --project src/Raiven.App` instead everywhere below - it
+behaves identically, it just won't survive a rebuild.)
+
+### 3. Register the Claude Code hook
+
+Merge `docs/hook-snippet.json` into `%USERPROFILE%\.claude\settings.json`
+(create the file, or the `hooks` section within it, if it doesn't exist
+yet). This tells Claude Code to notify RAIVEN's listener whenever a turn
+finishes - it's a one-time, global change that applies to every Claude Code
+session on the machine, in any editor or terminal. Restart any Claude Code
+sessions that were already running so they pick up the change.
+
+### 4. Confirm Claude credentials are in place
+
+By default RAIVEN summarizes via your Claude subscription through the
+`claude` CLI - if `claude /login` already works in a terminal, you're done,
+no further setup needed. See [Configuration](#configuration) if you'd rather
+use a pay-per-token API key instead.
+
+### 5. Make it permanent (optional)
+
+Right-click the tray icon -> **Start with Windows**. This registers whichever
+exe is currently running, so do this only after launching RAIVEN from its
+permanent install folder (step 2), not from a `dotnet run` build.
+
+### 6. Try it
+
+With RAIVEN running, in another terminal:
+
+```
+powershell -File scripts\send-test-event.ps1
+```
+
+You should hear a chime, see a "Claude finished in RAIVEN" toast, and hearing
+"Play summary" speak a summary aloud confirms the whole pipeline - chime,
+toast, transcript read, Claude Haiku call, and local voice - is working.
+From then on, it fires automatically whenever any Claude Code session
+finishes a turn.
+
+## Usage
+
+### Tray menu
+
+Right-click the tray icon:
 
 Pause notifications * Test notification * Test voice * Start with Windows *
 Open data folder * Quit
+
+**Pause notifications** is worth knowing about: Claude Code's `Stop` hook
+fires at the end of *every* turn, including a live back-and-forth chat. If
+you're actively conversing with Claude in one window, pause notifications so
+you're not chimed on every reply; unpause when you hand off a longer task and
+tab away - that's the scenario RAIVEN is built for.
+
+### Testing without a live Claude Code session
+
+With RAIVEN running: `powershell -File scripts\send-test-event.ps1` - posts a
+synthetic finished-turn event with a fake transcript, so you can exercise the
+whole chime -> toast -> click -> summary -> voice path on demand.
 
 ## Configuration
 
@@ -64,11 +144,8 @@ Open data folder * Quit
 | `SummaryBackend` | `cli` | `cli` uses your Claude subscription via the `claude` CLI (no per-token cost); `api` uses the Anthropic API directly (pay-per-token, needs `ANTHROPIC_API_KEY`) |
 | `CliModelAlias` | `haiku` | CLI model alias used for summaries when `SummaryBackend` is `cli` - one of `sonnet`, `opus`, `haiku`, `fable` |
 
-Logs: `%APPDATA%\Raiven\logs\raiven.log`.
-
-## Testing without Claude Code
-
-With RAIVEN running: `powershell -File scripts/send-test-event.ps1`
+Logs: `%APPDATA%\Raiven\logs\raiven.log` - check here first whenever
+something doesn't work as expected.
 
 ## Troubleshooting
 
@@ -80,15 +157,20 @@ With RAIVEN running: `powershell -File scripts/send-test-event.ps1`
   "class not registered" error, the install can be present but not correctly
   registered - repair it with
   `winget install --id Microsoft.WindowsAppRuntime.2.2 --force` (this exact
-  situation occurred during development).
+  situation occurred during development). RAIVEN will show an error dialog
+  naming this fix if it hits this at startup, rather than failing silently.
 - **"Access denied" starting the listener**: rare on Win10/11 loopback; run
   `netsh http add urlacl url=http://127.0.0.1:9876/ user=%USERNAME%` once as
   admin, or change `Port`.
 - **Port in use**: change `Port` in config.json AND in the hook snippet.
-- **Summary fails**: usually missing Anthropic credentials - see Setup step 3.
+- **Summary fails**: usually missing Anthropic credentials - see Installation
+  step 4.
 - **Summary fails with "Could not launch the claude CLI"**: make sure Claude
   Code is installed and `claude` is on PATH, and that you're logged in
   (`claude /login`).
+- **"Start with Windows" launches an old/wrong build**: it registers
+  whatever exe was running when you toggled it on. Re-toggle it off and on
+  again after publishing a new build to the same install folder.
 
 ## Roadmap
 

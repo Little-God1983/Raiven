@@ -49,6 +49,22 @@ public static class EventParser
         return true;
     }
 
+    public static bool TryParseClaudeNotification(RaivenEvent e, out ClaudeNotificationEvent notification)
+    {
+        notification = null!;
+        if (e.Source != "claude-code" || e.Type != "Notification")
+            return false;
+        if (!TryGetString(e.Payload, "session_id", out var sessionId) ||
+            !TryGetString(e.Payload, "transcript_path", out var transcriptPath) ||
+            !TryGetString(e.Payload, "cwd", out var cwd))
+            return false;
+
+        TryGetString(e.Payload, "message", out var message);
+        var notificationType = TryGetString(e.Payload, "notification_type", out var t) ? t : null;
+        notification = new ClaudeNotificationEvent(sessionId, transcriptPath, cwd, message ?? "", notificationType);
+        return true;
+    }
+
     private static bool TryGetString(JsonElement obj, string name, out string value)
     {
         value = null!;

@@ -12,6 +12,7 @@ public sealed class VoiceService(RaivenConfig config) : IVoice
     private KokoroTTS? _tts;
     private KokoroVoice? _voice;
 
+    // KokoroSharp stops any in-flight playback before speaking - see IVoice.Speak.
     public void Speak(string text)
     {
         lock (_lock)

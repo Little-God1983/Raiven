@@ -177,13 +177,18 @@ is persisted to `%APPDATA%\Raiven\history.json`.
 
 When Claude Code has a question - a permission prompt, or it's waiting on
 input - RAIVEN chimes, shows a toast, and speaks immediately (no countdown,
-no history entry - unlike finished-turn summaries).
+no history entry - unlike finished-turn summaries). Because a new voice line
+always preempts whatever is currently playing, a question announcement can
+interrupt a summary that is still being read aloud; an interrupted summary
+can be replayed afterward from **Recent summaries**.
 
 Both finished-turn and question notifications can be switched on/off, and
 their voice mode changed, from the tray's **Settings** submenu, which saves
 every change straight to `config.json`. The spoken word limits
 (`FinishedTurnWordLimit`, `QuestionWordLimit`) are config.json-only - there's
-no tray control for them.
+no tray control for them. RAIVEN rewrites the whole file on every
+Settings-menu change while it's running, so quit RAIVEN before hand-editing
+config.json, or the next Settings-menu change may overwrite your edit.
 
 Finished-turn summaries are cached per session (see above): if you change
 `FinishedTurnVoice` after a turn's summary has already been generated,

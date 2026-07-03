@@ -47,6 +47,8 @@ public sealed class SummaryPipeline(
             }
             else
             {
+                if (!config.FinishedTurnVoice.Equals("summary", StringComparison.OrdinalIgnoreCase))
+                    FileLog.Info($"Unknown FinishedTurnVoice '{config.FinishedTurnVoice}'; using summary");
                 using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
                 spokenText = await _summaries.SummarizeAsync(slice, cts.Token);
                 FileLog.Info($"Summary for {sessionId}: {spokenText}");

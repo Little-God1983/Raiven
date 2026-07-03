@@ -45,6 +45,9 @@ public sealed class QuestionPipeline(RaivenConfig config, IClaudeClient claude, 
                     voice.Speak(await SummarizeQuestionAsync(evt));
                     return;
                 default: // "announce", "message" with empty message, and unknown values
+                    if (!config.QuestionVoice.Equals("announce", StringComparison.OrdinalIgnoreCase) &&
+                        !config.QuestionVoice.Equals("message", StringComparison.OrdinalIgnoreCase))
+                        FileLog.Info($"Unknown QuestionVoice '{config.QuestionVoice}'; using announce");
                     voice.Speak(announceLine);
                     return;
             }

@@ -177,4 +177,38 @@ public class SummaryPipelineTests
 
         Assert.Empty(history.Entries);
     }
+
+    [Fact]
+    public async Task PlaySummaryAsync_MessageMode_SpeaksLastMessageWithoutClaude()
+    {
+        var registry = new SessionRegistry(TimeSpan.FromHours(4));
+        registry.Upsert("s1", WriteTranscript(), @"E:\Repos\RAIVEN", DateTimeOffset.Now);
+        var claude = new FakeClaudeClient();
+        var voice = new FakeVoice();
+        var config = new RaivenConfig { FinishedTurnVoice = "message" };
+        var pipeline = new SummaryPipeline(registry, config, claude, new FakeNotifier(), voice, NewHistory());
+
+        await pipeline.PlaySummaryAsync("s1");
+
+        Assert.Equal(["Fixed it. Tests pass."], voice.Spoken);
+        Assert.Equal(0, claude.Calls);
+    }
+
+    [Fact]
+    public async Task PlaySummaryAsync_MessageMode_AppliesWordLimitAndCaches()
+    {
+        var registry = new SessionRegistry(TimeSpan.FromHours(4));
+        registry.Upsert("s1", WriteTranscript(), @"E:\Repos\RAIVEN", DateTimeOffset.Now);
+        var voice = new FakeVoice();
+        var history = NewHistory();
+        var config = new RaivenConfig { FinishedTurnVoice = "message", FinishedTurnWordLimit = 2 };
+        var pipeline = new SummaryPipeline(registry, config, new FakeClaudeClient(), new FakeNotifier(), voice, history);
+
+        await pipeline.PlaySummaryAsync("s1");
+        await pipeline.PlaySummaryAsync("s1"); // second call must replay from cache
+
+        Assert.Equal(["Fixed it.", "Fixed it."], voice.Spoken);
+        var entry = Assert.Single(history.Entries);
+        Assert.Equal("Fixed it.", entry.SummaryText);
+    }
 }

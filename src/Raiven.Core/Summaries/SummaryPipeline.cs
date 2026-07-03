@@ -37,17 +37,28 @@ public sealed class SummaryPipeline(
 
             var slice = TranscriptReader.ReadLastTurn(info.TranscriptPath, config.MaxTranscriptChars);
 
-            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
-            var summary = await _summaries.SummarizeAsync(slice, cts.Token);
-            FileLog.Info($"Summary for {sessionId}: {summary}");
+            string spokenText;
+            if (config.FinishedTurnVoice.Equals("message", StringComparison.OrdinalIgnoreCase))
+            {
+                spokenText = string.IsNullOrWhiteSpace(slice.AssistantText)
+                    ? "Claude finished, but there was no message to read."
+                    : SpeechText.LimitWords(slice.AssistantText, config.FinishedTurnWordLimit);
+                FileLog.Info($"Reading last message for {sessionId}");
+            }
+            else
+            {
+                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+                spokenText = await _summaries.SummarizeAsync(slice, cts.Token);
+                FileLog.Info($"Summary for {sessionId}: {spokenText}");
+            }
 
             var folder = Path.GetFileName(info.Cwd.TrimEnd('\\', '/'));
             if (folder.Length == 0) folder = info.Cwd;
             var headline = TranscriptReader.ReadFirstPrompt(info.TranscriptPath) ?? folder;
             history.Add(new SummaryHistoryEntry(
-                sessionId, headline, folder, DateTimeOffset.Now, info.TranscriptPath, lastWriteUtc, summary));
+                sessionId, headline, folder, DateTimeOffset.Now, info.TranscriptPath, lastWriteUtc, spokenText));
 
-            voice.Speak(summary);
+            voice.Speak(spokenText);
         }
         catch (Exception ex)
         {

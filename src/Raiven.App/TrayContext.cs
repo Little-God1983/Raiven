@@ -1,3 +1,5 @@
+using Raiven.Core.Logging;
+
 namespace Raiven.App;
 
 public sealed class TrayContext : ApplicationContext
@@ -31,7 +33,7 @@ public sealed class TrayContext : ApplicationContext
 
         _icon = new NotifyIcon
         {
-            Icon = System.Drawing.SystemIcons.Application,
+            Icon = LoadTrayIcon(),
             Text = "RAIVEN",
             Visible = true,
             ContextMenuStrip = menu,
@@ -43,5 +45,22 @@ public sealed class TrayContext : ApplicationContext
         _icon.Visible = false;
         _icon.Dispose();
         base.ExitThreadCore();
+    }
+
+    private static Icon LoadTrayIcon()
+    {
+        var iconPath = Path.Combine(AppContext.BaseDirectory, "Assets", "raiven.ico");
+        if (File.Exists(iconPath))
+        {
+            try
+            {
+                return new Icon(iconPath, SystemInformation.SmallIconSize);
+            }
+            catch (Exception ex)
+            {
+                FileLog.Error("Failed to load RAIVEN tray icon; falling back to default", ex);
+            }
+        }
+        return SystemIcons.Application;
     }
 }

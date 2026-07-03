@@ -19,9 +19,11 @@ public class QuestionPipelineTests
         public string Response = "Claude wants permission to run the tests.";
         public Exception? Throws;
         public int Calls;
+        public string? LastUserContent;
         public Task<string> CompleteAsync(string systemPrompt, string userContent, CancellationToken ct = default)
         {
             Interlocked.Increment(ref Calls);
+            LastUserContent = userContent;
             return Throws is null ? Task.FromResult(Response) : Task.FromException<string>(Throws);
         }
     }
@@ -113,5 +115,17 @@ public class QuestionPipelineTests
         await pipeline.AnnounceAsync(Evt());
 
         Assert.Equal(["Claude Code has a question in RAIVEN."], voice.Spoken);
+    }
+
+    [Fact]
+    public async Task AnnounceAsync_SummaryMode_SendsHookMessageToClaude()
+    {
+        var claude = new FakeClaudeClient();
+        var pipeline = new QuestionPipeline(new RaivenConfig { QuestionVoice = "summary" }, claude, new FakeVoice());
+
+        await pipeline.AnnounceAsync(Evt("Claude needs your permission to use Bash"));
+
+        Assert.NotNull(claude.LastUserContent);
+        Assert.Contains("Claude needs your permission to use Bash", claude.LastUserContent);
     }
 }

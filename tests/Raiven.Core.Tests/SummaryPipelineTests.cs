@@ -213,4 +213,24 @@ public class SummaryPipelineTests
         var entry = Assert.Single(history.Entries);
         Assert.Equal("Fixed it.", entry.SummaryText);
     }
+
+    [Fact]
+    public async Task PlaySummaryAsync_MessageMode_EmptyAssistantText_SpeaksFallback()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"raiven-pipeline-{Guid.NewGuid():N}.jsonl");
+        File.WriteAllLines(path,
+        [
+            """{"type":"user","message":{"role":"user","content":"Do the thing"},"sessionId":"s1"}""",
+            """{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","name":"Bash"}]},"sessionId":"s1"}""",
+        ]);
+        var registry = new SessionRegistry(TimeSpan.FromHours(4));
+        registry.Upsert("s1", path, @"E:\Repos\RAIVEN", DateTimeOffset.Now);
+        var voice = new FakeVoice();
+        var config = new RaivenConfig { FinishedTurnVoice = "message" };
+        var pipeline = new SummaryPipeline(registry, config, new FakeClaudeClient(), new FakeNotifier(), voice, NewHistory());
+
+        await pipeline.PlaySummaryAsync("s1");
+
+        Assert.Equal(["Claude finished, but there was no message to read."], voice.Spoken);
+    }
 }

@@ -6,6 +6,8 @@ namespace Raiven.Core.Summaries;
 
 public sealed class ClaudeCliClient(string modelAlias) : IClaudeClient
 {
+    private const string ClaudeCliNotFoundMessage = "Could not find the 'claude' CLI. Is Claude Code installed and on PATH?";
+
     public async Task<string> CompleteAsync(string systemPrompt, string userContent, CancellationToken ct = default)
     {
         string claudePath;
@@ -13,10 +15,9 @@ public sealed class ClaudeCliClient(string modelAlias) : IClaudeClient
         {
             claudePath = ResolveExecutablePath("claude");
         }
-        catch (InvalidOperationException)
+        catch (InvalidOperationException ex)
         {
-            throw new InvalidOperationException(
-                "Could not find the 'claude' CLI on PATH. Is Claude Code installed and on PATH?");
+            throw new InvalidOperationException(ClaudeCliNotFoundMessage, ex);
         }
 
         var psi = new ProcessStartInfo
@@ -56,8 +57,7 @@ public sealed class ClaudeCliClient(string modelAlias) : IClaudeClient
         }
         catch (System.ComponentModel.Win32Exception ex)
         {
-            throw new InvalidOperationException(
-                "Could not launch the 'claude' CLI. Is Claude Code installed and on PATH?", ex);
+            throw new InvalidOperationException(ClaudeCliNotFoundMessage, ex);
         }
 
         var writeTask = WriteStdinAsync(process, userContent, ct);

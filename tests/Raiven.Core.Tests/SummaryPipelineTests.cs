@@ -11,11 +11,16 @@ public class SummaryPipelineTests
     private sealed class FakeNotifier : INotifier
     {
         public event Action<string>? PlaySummaryRequested;
+        public event Action<string>? AbortRequested;
         public List<string> Errors { get; } = [];
         public List<(string SessionId, string Folder)> Finished { get; } = [];
-        public void ShowFinished(string sessionId, string folderName) => Finished.Add((sessionId, folderName));
+        public void ShowFinished(string sessionId, string folderName, string? headline) => Finished.Add((sessionId, folderName));
+        public void ShowFinishedCountdown(string sessionId, string folderName, string? headline, int totalSeconds) => Finished.Add((sessionId, folderName));
         public void ShowError(string message) => Errors.Add(message);
+        public void UpdateCountdownProgress(string sessionId, double fraction) { }
+        public void RemoveNotification(string sessionId) { }
         public void RaisePlaySummary(string sessionId) => PlaySummaryRequested?.Invoke(sessionId);
+        public void RaiseAbort(string sessionId) => AbortRequested?.Invoke(sessionId);
     }
 
     private sealed class FakeVoice : IVoice

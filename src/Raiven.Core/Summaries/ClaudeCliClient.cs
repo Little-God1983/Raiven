@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Text.Json;
+using Raiven.Core.Logging;
 
 namespace Raiven.Core.Summaries;
 
@@ -48,19 +49,18 @@ public sealed class ClaudeCliClient(string modelAlias) : IClaudeClient
                 "Could not launch the 'claude' CLI. Is Claude Code installed and on PATH?", ex);
         }
 
-        await process.StandardInput.WriteAsync(userContent);
-        process.StandardInput.Close();
-
+        var writeTask = WriteStdinAsync(process, userContent, ct);
         var stdoutTask = process.StandardOutput.ReadToEndAsync(ct);
         var stderrTask = process.StandardError.ReadToEndAsync(ct);
 
         try
         {
-            await process.WaitForExitAsync(ct);
+            await Task.WhenAll(writeTask, process.WaitForExitAsync(ct));
         }
         catch (OperationCanceledException)
         {
-            try { process.Kill(entireProcessTree: true); } catch { /* already exited */ }
+            try { process.Kill(entireProcessTree: true); }
+            catch (Exception ex) { FileLog.Error("Failed to kill claude CLI subprocess after cancellation", ex); }
             throw;
         }
 
@@ -74,6 +74,14 @@ public sealed class ClaudeCliClient(string modelAlias) : IClaudeClient
         }
 
         return ExtractResultText(stdout);
+    }
+
+    private static async Task WriteStdinAsync(Process process, string userContent, CancellationToken ct)
+    {
+        var bytes = process.StandardInput.Encoding.GetBytes(userContent);
+        await process.StandardInput.BaseStream.WriteAsync(bytes, ct);
+        await process.StandardInput.BaseStream.FlushAsync(ct);
+        process.StandardInput.Close();
     }
 
     public static string ExtractResultText(string stdoutJson)

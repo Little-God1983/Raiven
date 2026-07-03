@@ -12,7 +12,8 @@ public sealed class SummaryPipeline(
     RaivenConfig config,
     IClaudeClient claude,
     INotifier notifier,
-    IVoice voice)
+    IVoice voice,
+    SummaryHistory history)
 {
     private readonly SummaryService _summaries = new(claude);
 
@@ -26,11 +27,25 @@ public sealed class SummaryPipeline(
                 return;
             }
 
+            var lastWriteUtc = File.GetLastWriteTimeUtc(info.TranscriptPath);
+            if (history.TryGetCached(sessionId, lastWriteUtc, out var cached))
+            {
+                FileLog.Info($"Replaying cached summary for {sessionId}");
+                voice.Speak(cached.SummaryText);
+                return;
+            }
+
             var slice = TranscriptReader.ReadLastTurn(info.TranscriptPath, config.MaxTranscriptChars);
 
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
             var summary = await _summaries.SummarizeAsync(slice, cts.Token);
             FileLog.Info($"Summary for {sessionId}: {summary}");
+
+            var folder = Path.GetFileName(info.Cwd.TrimEnd('\\', '/'));
+            if (folder.Length == 0) folder = info.Cwd;
+            var headline = TranscriptReader.ReadFirstPrompt(info.TranscriptPath) ?? folder;
+            history.Add(new SummaryHistoryEntry(
+                sessionId, headline, folder, DateTimeOffset.Now, info.TranscriptPath, lastWriteUtc, summary));
 
             voice.Speak(summary);
         }

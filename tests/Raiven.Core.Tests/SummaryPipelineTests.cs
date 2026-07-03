@@ -28,9 +28,16 @@ public class SummaryPipelineTests
     {
         public string Response = "I fixed the login bug.";
         public Exception? Throws;
-        public Task<string> CompleteAsync(string systemPrompt, string userContent, CancellationToken ct = default) =>
-            Throws is null ? Task.FromResult(Response) : Task.FromException<string>(Throws);
+        public int Calls;
+        public Task<string> CompleteAsync(string systemPrompt, string userContent, CancellationToken ct = default)
+        {
+            Interlocked.Increment(ref Calls);
+            return Throws is null ? Task.FromResult(Response) : Task.FromException<string>(Throws);
+        }
     }
+
+    private static SummaryHistory NewHistory() =>
+        SummaryHistory.Load(Path.Combine(Path.GetTempPath(), $"raiven-hist-{Guid.NewGuid():N}", "history.json"));
 
     private static string WriteTranscript()
     {
@@ -49,7 +56,7 @@ public class SummaryPipelineTests
         var notifier = new FakeNotifier();
         var voice = new FakeVoice();
         var pipeline = new SummaryPipeline(
-            new SessionRegistry(TimeSpan.FromHours(4)), new RaivenConfig(), new FakeClaudeClient(), notifier, voice);
+            new SessionRegistry(TimeSpan.FromHours(4)), new RaivenConfig(), new FakeClaudeClient(), notifier, voice, NewHistory());
 
         await pipeline.PlaySummaryAsync("nope");
 
@@ -64,7 +71,7 @@ public class SummaryPipelineTests
         registry.Upsert("s1", WriteTranscript(), @"E:\Repos\RAIVEN", DateTimeOffset.Now);
         var notifier = new FakeNotifier();
         var voice = new FakeVoice();
-        var pipeline = new SummaryPipeline(registry, new RaivenConfig(), new FakeClaudeClient(), notifier, voice);
+        var pipeline = new SummaryPipeline(registry, new RaivenConfig(), new FakeClaudeClient(), notifier, voice, NewHistory());
 
         await pipeline.PlaySummaryAsync("s1");
 
@@ -80,7 +87,7 @@ public class SummaryPipelineTests
         var notifier = new FakeNotifier();
         var voice = new FakeVoice();
         var claude = new FakeClaudeClient { Throws = new InvalidOperationException("boom") };
-        var pipeline = new SummaryPipeline(registry, new RaivenConfig(), claude, notifier, voice);
+        var pipeline = new SummaryPipeline(registry, new RaivenConfig(), claude, notifier, voice, NewHistory());
 
         await pipeline.PlaySummaryAsync("s1");
 
@@ -95,11 +102,74 @@ public class SummaryPipelineTests
         registry.Upsert("s1", Path.Combine(Path.GetTempPath(), "raiven-does-not-exist.jsonl"), "c", DateTimeOffset.Now);
         var notifier = new FakeNotifier();
         var voice = new FakeVoice();
-        var pipeline = new SummaryPipeline(registry, new RaivenConfig(), new FakeClaudeClient(), notifier, voice);
+        var pipeline = new SummaryPipeline(registry, new RaivenConfig(), new FakeClaudeClient(), notifier, voice, NewHistory());
 
         await pipeline.PlaySummaryAsync("s1");
 
         Assert.Contains(notifier.Errors, e => e.Contains("Couldn't get the summary"));
         Assert.Empty(voice.Spoken);
+    }
+
+    [Fact]
+    public async Task PlaySummaryAsync_SecondCallSameTranscript_UsesCacheAndSkipsClaude()
+    {
+        var registry = new SessionRegistry(TimeSpan.FromHours(4));
+        registry.Upsert("s1", WriteTranscript(), @"E:\Repos\RAIVEN", DateTimeOffset.Now);
+        var claude = new FakeClaudeClient();
+        var voice = new FakeVoice();
+        var pipeline = new SummaryPipeline(registry, new RaivenConfig(), claude, new FakeNotifier(), voice, NewHistory());
+
+        await pipeline.PlaySummaryAsync("s1");
+        await pipeline.PlaySummaryAsync("s1");
+
+        Assert.Equal(1, claude.Calls);
+        Assert.Equal(["I fixed the login bug.", "I fixed the login bug."], voice.Spoken);
+    }
+
+    [Fact]
+    public async Task PlaySummaryAsync_RecordsHistoryEntryWithHeadline()
+    {
+        var registry = new SessionRegistry(TimeSpan.FromHours(4));
+        registry.Upsert("s1", WriteTranscript(), @"E:\Repos\RAIVEN", DateTimeOffset.Now);
+        var history = NewHistory();
+        var pipeline = new SummaryPipeline(registry, new RaivenConfig(), new FakeClaudeClient(), new FakeNotifier(), new FakeVoice(), history);
+
+        await pipeline.PlaySummaryAsync("s1");
+
+        var entry = Assert.Single(history.Entries);
+        Assert.Equal("s1", entry.SessionId);
+        Assert.Equal("Fix the login bug", entry.Headline);
+        Assert.Equal("RAIVEN", entry.Folder);
+        Assert.Equal("I fixed the login bug.", entry.SummaryText);
+    }
+
+    [Fact]
+    public async Task PlaySummaryAsync_ChangedTranscript_RegeneratesInsteadOfCaching()
+    {
+        var registry = new SessionRegistry(TimeSpan.FromHours(4));
+        var path = WriteTranscript();
+        registry.Upsert("s1", path, @"E:\Repos\RAIVEN", DateTimeOffset.Now);
+        var claude = new FakeClaudeClient();
+        var pipeline = new SummaryPipeline(registry, new RaivenConfig(), claude, new FakeNotifier(), new FakeVoice(), NewHistory());
+
+        await pipeline.PlaySummaryAsync("s1");
+        File.SetLastWriteTimeUtc(path, DateTime.UtcNow.AddMinutes(1)); // simulate a new turn
+        await pipeline.PlaySummaryAsync("s1");
+
+        Assert.Equal(2, claude.Calls);
+    }
+
+    [Fact]
+    public async Task PlaySummaryAsync_ClaudeFails_RecordsNothing()
+    {
+        var registry = new SessionRegistry(TimeSpan.FromHours(4));
+        registry.Upsert("s1", WriteTranscript(), @"E:\Repos\RAIVEN", DateTimeOffset.Now);
+        var history = NewHistory();
+        var claude = new FakeClaudeClient { Throws = new InvalidOperationException("boom") };
+        var pipeline = new SummaryPipeline(registry, new RaivenConfig(), claude, new FakeNotifier(), new FakeVoice(), history);
+
+        await pipeline.PlaySummaryAsync("s1");
+
+        Assert.Empty(history.Entries);
     }
 }

@@ -12,17 +12,36 @@ public class SummaryPipelineTests
     {
         public event Action<string>? PlaySummaryRequested;
         public event Action<string>? AbortRequested;
+        public event Action<string>? StopRequested;
+        public event Action<string>? HideRequested;
         public List<string> Errors { get; } = [];
         public List<(string SessionId, string Folder)> Finished { get; } = [];
         public List<(string Folder, string? Headline, string Message)> Questions { get; } = [];
+        public List<(string SessionId, string Folder, string? Headline)> StatusShown { get; } = [];
+        public List<(string SessionId, string Status, double Fraction)> StatusUpdates { get; } = [];
+        public List<string> Removed { get; } = [];
+        public bool ToastLive { get; set; }
         public void ShowFinished(string sessionId, string folderName, string? headline) => Finished.Add((sessionId, folderName));
         public void ShowFinishedCountdown(string sessionId, string folderName, string? headline, int totalSeconds) => Finished.Add((sessionId, folderName));
         public void ShowQuestion(string folderName, string? headline, string message) => Questions.Add((folderName, headline, message));
         public void ShowError(string message) => Errors.Add(message);
         public void UpdateCountdownProgress(string sessionId, double fraction) { }
-        public void RemoveNotification(string sessionId) { }
+        public void ShowPlaybackStatus(string sessionId, string folderName, string? headline)
+        {
+            StatusShown.Add((sessionId, folderName, headline));
+            ToastLive = true;
+        }
+        public void UpdatePlaybackStatus(string sessionId, string status, double fraction) => StatusUpdates.Add((sessionId, status, fraction));
+        public bool IsToastLive(string sessionId) => ToastLive;
+        public void RemoveNotification(string sessionId)
+        {
+            Removed.Add(sessionId);
+            ToastLive = false;
+        }
         public void RaisePlaySummary(string sessionId) => PlaySummaryRequested?.Invoke(sessionId);
         public void RaiseAbort(string sessionId) => AbortRequested?.Invoke(sessionId);
+        public void RaiseStop(string sessionId) => StopRequested?.Invoke(sessionId);
+        public void RaiseHide(string sessionId) => HideRequested?.Invoke(sessionId);
     }
 
     private sealed class FakeVoice : IVoice

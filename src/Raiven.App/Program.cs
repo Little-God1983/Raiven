@@ -65,7 +65,7 @@ internal static class Program
                 FileLog.Info("Stale toast aborted; nothing to do.");
                 return;
             }
-            new AppSdkNotifier().ShowError("RAIVEN wasn't running - that session's summary is no longer available.");
+            new AppSdkNotifier(config).ShowError("RAIVEN wasn't running - that session's summary is no longer available.");
             Thread.Sleep(TimeSpan.FromSeconds(3));
             return;
         }
@@ -79,7 +79,7 @@ internal static class Program
 
         var state = new AppState();
         var registry = new SessionRegistry(TimeSpan.FromMinutes(config.SessionExpiryMinutes));
-        var notifier = new AppSdkNotifier();
+        var notifier = new AppSdkNotifier(config);
         var voice = new VoiceService(config);
 
         Raiven.Core.Summaries.IClaudeClient claude = config.SummaryBackend.Equals("api", StringComparison.OrdinalIgnoreCase)
@@ -215,7 +215,7 @@ internal static class Program
 
     private static void RunToastTest(RaivenConfig config)
     {
-        var notifier = new AppSdkNotifier();
+        var notifier = new AppSdkNotifier(config);
         notifier.PlaySummaryRequested += id => FileLog.Info($"TEST: play now requested for {id}");
         notifier.AbortRequested += id => FileLog.Info($"TEST: abort requested for {id}");
         ChimePlayer.Play(config);

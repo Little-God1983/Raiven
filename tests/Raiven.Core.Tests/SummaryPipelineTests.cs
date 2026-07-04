@@ -68,10 +68,15 @@ public class SummaryPipelineTests
         public string Response = "I fixed the login bug.";
         public Exception? Throws;
         public int Calls;
-        public Task<string> CompleteAsync(string systemPrompt, string userContent, CancellationToken ct = default)
+        public Task? Blocker;
+        public TaskCompletionSource Entered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public async Task<string> CompleteAsync(string systemPrompt, string userContent, CancellationToken ct = default)
         {
             Interlocked.Increment(ref Calls);
-            return Throws is null ? Task.FromResult(Response) : Task.FromException<string>(Throws);
+            Entered.TrySetResult();
+            if (Blocker is not null) await Blocker;
+            if (Throws is not null) throw Throws;
+            return Response;
         }
     }
 
@@ -443,5 +448,42 @@ public class SummaryPipelineTests
         await play;
 
         Assert.False(pipeline.IsSpeaking("s1"));
+    }
+
+    [Fact]
+    public async Task RequestStop_DuringSummarize_SkipsSpeechButKeepsHistoryAndRemovesToast()
+    {
+        var registry = new SessionRegistry(TimeSpan.FromHours(4));
+        registry.Upsert("s1", WriteTranscript(), @"E:\Repos\RAIVEN", DateTimeOffset.Now);
+        var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var claude = new FakeClaudeClient { Blocker = gate.Task };
+        var notifier = new FakeNotifier();
+        var voice = new FakeVoice();
+        var history = NewHistory();
+        var pipeline = new SummaryPipeline(registry, new RaivenConfig(), claude, notifier, voice, history);
+
+        var play = pipeline.PlaySummaryAsync("s1");
+        await claude.Entered.Task;
+        pipeline.RequestStop("s1");
+        gate.SetResult();
+        await play;
+
+        Assert.Empty(voice.Spoken);
+        Assert.Single(history.Entries);           // the generated summary is still cached for replay
+        Assert.Contains("s1", notifier.Removed);  // the toast never outlives the run
+    }
+
+    [Fact]
+    public async Task RequestStop_StaleMark_DoesNotAffectNextRun()
+    {
+        var registry = new SessionRegistry(TimeSpan.FromHours(4));
+        registry.Upsert("s1", WriteTranscript(), @"E:\Repos\RAIVEN", DateTimeOffset.Now);
+        var voice = new FakeVoice();
+        var pipeline = new SummaryPipeline(registry, new RaivenConfig(), new FakeClaudeClient(), new FakeNotifier(), voice, NewHistory());
+
+        pipeline.RequestStop("s1"); // stale: no run in flight
+        await pipeline.PlaySummaryAsync("s1");
+
+        Assert.Single(voice.Spoken);
     }
 }

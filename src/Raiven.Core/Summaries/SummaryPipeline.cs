@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using Raiven.Core.Config;
 using Raiven.Core.Logging;
 using Raiven.Core.Notifications;
@@ -17,9 +18,14 @@ public sealed class SummaryPipeline(
 {
     private readonly SummaryService _summaries = new(claude);
     private string? _speakingSessionId;
+    private readonly ConcurrentDictionary<string, byte> _stopRequested = new();
 
     /// <summary>Whether this session's text is the one currently being generated/spoken.</summary>
     public bool IsSpeaking(string sessionId) => Volatile.Read(ref _speakingSessionId) == sessionId;
+
+    /// <summary>Skip the upcoming speech of this session's in-flight run (Stop clicked while
+    /// it was still summarizing/generating). A fresh run clears any stale request.</summary>
+    public void RequestStop(string sessionId) => _stopRequested[sessionId] = 0;
 
     public Task PlaySummaryAsync(string sessionId) => PlaySummaryAsync(sessionId, userInitiated: true);
 
@@ -30,6 +36,7 @@ public sealed class SummaryPipeline(
     /// </summary>
     public async Task PlaySummaryAsync(string sessionId, bool userInitiated)
     {
+        _stopRequested.TryRemove(sessionId, out _); // a stale Stop from a previous run must not cancel this one
         try
         {
             if (!registry.TryGet(sessionId, DateTimeOffset.Now, out var info))
@@ -95,6 +102,7 @@ public sealed class SummaryPipeline(
     /// <summary>Replay a cached history entry (tray menu): no Claude call, no history write.</summary>
     public async Task PlayCachedAsync(SummaryHistoryEntry entry)
     {
+        _stopRequested.TryRemove(entry.SessionId, out _);
         try
         {
             EnsureStatusToast(entry.SessionId, entry.Folder, entry.Headline, userInitiated: true);
@@ -130,6 +138,11 @@ public sealed class SummaryPipeline(
 
     private async Task SpeakWithPhasesAsync(string sessionId, string text)
     {
+        if (_stopRequested.TryRemove(sessionId, out _))
+        {
+            FileLog.Info($"Speech skipped for {sessionId}: Stop was clicked during preparation");
+            return;
+        }
         Volatile.Write(ref _speakingSessionId, sessionId);
         try
         {

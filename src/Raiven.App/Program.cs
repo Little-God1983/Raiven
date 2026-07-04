@@ -96,6 +96,10 @@ internal static class Program
             TimeSpan.FromSeconds(delaySeconds),
             TimeSpan.FromMilliseconds(500));
 
+        // Guards against a "Play now" click and the expiry timer firing near-simultaneously
+        // (before the toast disappears), which would otherwise launch two Claude calls and
+        // speak the summary twice. Stale Action Center clicks with no countdown running still
+        // play from cache — this only dedupes concurrent triggers for the same session.
         var playing = new System.Collections.Concurrent.ConcurrentDictionary<string, byte>();
         async Task PlayOnce(string id, bool userInitiated)
         {
@@ -135,9 +139,14 @@ internal static class Program
             notifier.RemoveNotification(id);
             // Countdown-phase Stop is an abort; playback-phase Stop halts the voice -
             // but only when THIS session is the one speaking, so stopping session B's
-            // toast can never kill session A's speech.
-            if (!hadCountdown && pipeline.IsSpeaking(id))
-                voice.Stop();
+            // toast can never kill session A's speech. A Stop landing while the run is
+            // still preparing (summarizing/generating) marks the session instead, so
+            // the pipeline skips the speech when it gets there.
+            if (!hadCountdown)
+            {
+                if (pipeline.IsSpeaking(id)) voice.Stop();
+                else pipeline.RequestStop(id);
+            }
             FileLog.Info($"Stop requested for {id} (countdown canceled: {hadCountdown})");
         };
         notifier.HideRequested += id =>

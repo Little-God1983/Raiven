@@ -159,7 +159,7 @@ whole chime -> toast -> click -> summary -> voice path on demand.
 | `QuestionVoice` | `announce` | `announce` speaks a fixed "Claude Code has a question in {folder}." line; `message` reads the hook's message text verbatim, capped by `QuestionWordLimit`; `summary` asks Claude Haiku to phrase what's being asked. Unknown values (and `message` with an empty message) behave as `announce` |
 | `QuestionWordLimit` | `0` | Spoken word cap for `QuestionVoice: message` mode; `0` = unlimited. config.json-only - no tray control |
 | `KeepAudioAlive` | `false` | Plays a continuous silent stream so the audio device - and a Bluetooth link - never sleeps, preventing the first ~second of speech being swallowed. Toggled by tray **Settings -> Keep audio device awake**. Costs Bluetooth-headphone battery while on |
-| `ShowPlaybackStatus` | `true` | Finished-turn and replay toasts stay on screen through the whole pipeline and show what RAIVEN is doing (Summarizing with Haiku / Generating voice / Speaking), then dismiss when speech ends. `false` restores the old disappear-at-play behavior |
+| `ShowPlaybackStatus` | `true` | Finished-turn and replay toasts stay on screen through the whole pipeline and show what RAIVEN is doing (Summarizing with Haiku / Generating voice / Speaking), then dismiss when speech ends; also toggled by the tray **Settings** submenu. `false` restores the old disappear-at-play behavior |
 
 ### Auto-play, Play now/Abort, and Recent summaries
 
@@ -179,8 +179,9 @@ is persisted to `%APPDATA%\Raiven\history.json`.
 
 With `ShowPlaybackStatus` on (the default), the finished-turn toast stays on
 screen for the whole playback run: its progress bar text walks through
-"Summarizing with Haiku", "Loading voice model" (first run only - this makes
-the one-time ~320 MB Kokoro download visible), "Generating voice", and
+"Summarizing with Haiku", "Loading voice model" (first playback after each
+start of RAIVEN; on the very first run this makes the one-time ~320 MB Kokoro
+download visible), "Generating voice", and
 "Speaking", and the toast dismisses itself when the voice finishes. The
 buttons are **Play now**, **Stop** (during the countdown: cancel auto-play;
 during playback: stop the voice), and **Hide** (dismiss the toast - the

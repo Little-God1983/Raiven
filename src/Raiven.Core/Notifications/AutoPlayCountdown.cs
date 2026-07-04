@@ -37,10 +37,16 @@ public sealed class AutoPlayCountdown(TimeSpan total, TimeSpan tick) : IDisposab
         return false;
     }
 
-    public void CancelAll()
+    /// <summary>Cancel every running countdown; returns the session ids that were actually canceled.</summary>
+    public IReadOnlyList<string> CancelAll()
     {
+        List<string> canceled = [];
         foreach (var sessionId in _running.Keys)
-            Cancel(sessionId);
+        {
+            if (Cancel(sessionId))
+                canceled.Add(sessionId);
+        }
+        return canceled;
     }
 
     public void Dispose() => CancelAll();

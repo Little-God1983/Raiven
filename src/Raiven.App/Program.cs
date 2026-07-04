@@ -96,36 +96,18 @@ internal static class Program
             TimeSpan.FromSeconds(delaySeconds),
             TimeSpan.FromMilliseconds(500));
 
-        // Guards against a "Play now" click and the expiry timer firing near-simultaneously
-        // (before the toast disappears), which would otherwise launch two Claude calls and
-        // speak the summary twice. Stale Action Center clicks with no countdown running still
-        // play from cache — this only dedupes concurrent triggers for the same session.
-        var playing = new System.Collections.Concurrent.ConcurrentDictionary<string, byte>();
-        async Task PlayOnce(string id, bool userInitiated)
-        {
-            if (!playing.TryAdd(id, 0))
-            {
-                FileLog.Info($"Summary already in flight for {id}; ignoring duplicate trigger.");
-                return;
-            }
-            try { await pipeline.PlaySummaryAsync(id, userInitiated); }
-            finally { playing.TryRemove(id, out _); }
-        }
-
         countdown.Progress += (id, fraction) => notifier.UpdateCountdownProgress(id, fraction);
         countdown.Expired += id =>
         {
             if (state.Paused) return;
-            // With the status toast on, the countdown toast stays up and its progress
-            // bar carries the pipeline stages; the pipeline removes it when speech ends.
             if (!config.ShowPlaybackStatus) notifier.RemoveNotification(id);
-            _ = Task.Run(() => PlayOnce(id, userInitiated: false));
+            _ = Task.Run(() => pipeline.PlaySummaryAsync(id, userInitiated: false));
         };
         notifier.PlaySummaryRequested += id =>
         {
             countdown.Cancel(id);
             if (!config.ShowPlaybackStatus) notifier.RemoveNotification(id);
-            _ = Task.Run(() => PlayOnce(id, userInitiated: true));
+            _ = Task.Run(() => pipeline.PlaySummaryAsync(id, userInitiated: true));
         };
         notifier.AbortRequested += id =>
         {
@@ -170,6 +152,11 @@ internal static class Program
                     try { headline = TranscriptReader.ReadFirstPrompt(stop.TranscriptPath); }
                     catch (Exception ex) { FileLog.Error("Could not read chat headline", ex); }
 
+                    // This turn's toast supersedes any in-flight run for the session:
+                    // the old run must not remove or scribble on the new toast, and its
+                    // not-yet-started speech is obsolete. Audible speech keeps playing
+                    // until the new turn's own playback preempts it.
+                    pipeline.ObsoleteRun(stop.SessionId);
                     if (config.AutoPlaySummary)
                     {
                         // Cancel any prior countdown for this session first so a restarted
@@ -229,7 +216,12 @@ internal static class Program
                 replaySummary: entry => Task.Run(() => pipeline.PlayCachedAsync(entry)),
                 testToast: () => { ChimePlayer.Play(config); notifier.ShowFinished("test-session-001", "RAIVEN", "This is a test notification"); },
                 testVoice: () => Task.Run(() => voice.SpeakAsync("RAIVEN online. All systems operational.")),
-                onPauseChanged: paused => { if (paused) countdown.CancelAll(); },
+                onPauseChanged: paused =>
+                {
+                    if (!paused) return;
+                    foreach (var id in countdown.CancelAll())
+                        notifier.RemoveNotification(id);
+                },
                 onKeepAudioAliveChanged: on => { if (on) keepAlive.Start(); else keepAlive.Stop(); }));
         }
         finally

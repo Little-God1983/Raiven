@@ -486,4 +486,65 @@ public class SummaryPipelineTests
 
         Assert.Single(voice.Spoken);
     }
+
+    [Fact]
+    public async Task ObsoleteRun_InFlightRun_NeitherSpeaksNorRemovesToast()
+    {
+        var registry = new SessionRegistry(TimeSpan.FromHours(4));
+        registry.Upsert("s1", WriteTranscript(), @"E:\Repos\RAIVEN", DateTimeOffset.Now);
+        var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var claude = new FakeClaudeClient { Blocker = gate.Task };
+        var notifier = new FakeNotifier();
+        var voice = new FakeVoice();
+        var pipeline = new SummaryPipeline(registry, new RaivenConfig(), claude, notifier, voice, NewHistory());
+
+        var play = pipeline.PlaySummaryAsync("s1");
+        await claude.Entered.Task;
+        pipeline.ObsoleteRun("s1"); // a new finished-turn toast arrived for this session
+        gate.SetResult();
+        await play;
+
+        Assert.Empty(voice.Spoken);                    // the obsolete run never speaks
+        Assert.DoesNotContain("s1", notifier.Removed); // and leaves the new toast alone
+    }
+
+    [Fact]
+    public async Task PlaySummaryAsync_DuplicateTriggerDuringGeneration_IsDropped()
+    {
+        var registry = new SessionRegistry(TimeSpan.FromHours(4));
+        registry.Upsert("s1", WriteTranscript(), @"E:\Repos\RAIVEN", DateTimeOffset.Now);
+        var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var claude = new FakeClaudeClient { Blocker = gate.Task };
+        var voice = new FakeVoice();
+        var pipeline = new SummaryPipeline(registry, new RaivenConfig(), claude, new FakeNotifier(), voice, NewHistory());
+
+        var first = pipeline.PlaySummaryAsync("s1");
+        await claude.Entered.Task;
+        await pipeline.PlaySummaryAsync("s1"); // duplicate while the first is still summarizing
+        gate.SetResult();
+        await first;
+
+        Assert.Equal(1, claude.Calls);
+        Assert.Single(voice.Spoken);
+    }
+
+    [Fact]
+    public async Task PlaySummaryAsync_TriggerDuringSpeech_RunsInsteadOfBeingDropped()
+    {
+        var registry = new SessionRegistry(TimeSpan.FromHours(4));
+        registry.Upsert("s1", WriteTranscript(), @"E:\Repos\RAIVEN", DateTimeOffset.Now);
+        var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var voice = new FakeVoice { Blocker = gate.Task };
+        var claude = new FakeClaudeClient();
+        var pipeline = new SummaryPipeline(registry, new RaivenConfig(), claude, new FakeNotifier(), voice, NewHistory());
+
+        var first = pipeline.PlaySummaryAsync("s1");
+        await voice.SpeakEntered.Task; // first run is speaking; generation slot already released
+        var second = pipeline.PlaySummaryAsync("s1"); // a trigger during speech must not be dropped
+        gate.SetResult();
+        await Task.WhenAll(first, second);
+
+        Assert.Equal(2, voice.Spoken.Count); // replayed from cache instead of dropped
+        Assert.Equal(1, claude.Calls);
+    }
 }

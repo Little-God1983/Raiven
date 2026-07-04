@@ -103,4 +103,26 @@ public class RaivenConfigTests
         Assert.Equal(25, reloaded.QuestionWordLimit);
         Assert.Equal(9876, reloaded.Port); // untouched keys survive the round trip
     }
+
+    [Fact]
+    public void LoadOrCreate_MissingFile_HasKeepAliveAndPlaybackStatusDefaults()
+    {
+        var config = RaivenConfig.LoadOrCreate(TempConfigPath());
+
+        Assert.False(config.KeepAudioAlive);
+        Assert.True(config.ShowPlaybackStatus);
+    }
+
+    [Fact]
+    public void LoadOrCreate_ExistingFile_ReadsKeepAliveAndPlaybackStatusValues()
+    {
+        var path = TempConfigPath();
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        File.WriteAllText(path, """{"KeepAudioAlive":true,"ShowPlaybackStatus":false}""");
+
+        var config = RaivenConfig.LoadOrCreate(path);
+
+        Assert.True(config.KeepAudioAlive);
+        Assert.False(config.ShowPlaybackStatus);
+    }
 }

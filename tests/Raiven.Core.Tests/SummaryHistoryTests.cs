@@ -80,4 +80,27 @@ public class SummaryHistoryTests
         Assert.False(history.TryGetCached("s1", stamp.AddSeconds(1), out _)); // transcript changed
         Assert.False(history.TryGetCached("s2", stamp, out _));               // different session
     }
+
+    [Fact]
+    public void MenuLabel_FormatsDatetimeFolderHeadline()
+    {
+        // Local-kind DateTime -> DateTimeOffset assumes the local offset, so
+        // LocalDateTime round-trips the same wall time on any machine/timezone.
+        var generatedAt = new DateTimeOffset(new DateTime(2026, 7, 4, 14, 32, 0));
+        var entry = new SummaryHistoryEntry(
+            "s1", "Fix login bug", "RAIVEN", generatedAt,
+            @"C:\transcripts\s1.jsonl", DateTime.UtcNow, "text");
+
+        Assert.Equal("04.07.2026 14:32 — RAIVEN — Fix login bug", entry.MenuLabel);
+    }
+
+    [Fact]
+    public void MenuLabel_IsNotPersistedToJson()
+    {
+        var path = TempHistoryPath();
+        var history = SummaryHistory.Load(path);
+        history.Add(Entry("s1"));
+
+        Assert.DoesNotContain("MenuLabel", File.ReadAllText(path));
+    }
 }

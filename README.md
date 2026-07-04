@@ -121,8 +121,8 @@ finishes a turn.
 
 Right-click the tray icon:
 
-Pause notifications * Test notification * Test voice * Start with Windows *
-Open data folder * Quit
+Pause notifications * Recent summaries * Settings * Test notification *
+Test voice * Start with Windows * Open data folder * Quit
 
 **Pause notifications** is worth knowing about: Claude Code's `Stop` hook
 fires at the end of *every* turn, including a live back-and-forth chat. If
@@ -158,6 +158,8 @@ whole chime -> toast -> click -> summary -> voice path on demand.
 | `NotifyOnQuestion` | `true` | Master on/off switch for question notifications (Claude Code waiting on a permission prompt or input); also toggled by the tray **Settings** submenu |
 | `QuestionVoice` | `announce` | `announce` speaks a fixed "Claude Code has a question in {folder}." line; `message` reads the hook's message text verbatim, capped by `QuestionWordLimit`; `summary` asks Claude Haiku to phrase what's being asked. Unknown values (and `message` with an empty message) behave as `announce` |
 | `QuestionWordLimit` | `0` | Spoken word cap for `QuestionVoice: message` mode; `0` = unlimited. config.json-only - no tray control |
+| `KeepAudioAlive` | `false` | Plays a continuous silent stream so the audio device - and a Bluetooth link - never sleeps, preventing the first ~second of speech being swallowed. Toggled by tray **Settings -> Keep audio device awake**. Costs Bluetooth-headphone battery while on |
+| `ShowPlaybackStatus` | `true` | Finished-turn and replay toasts stay on screen through the whole pipeline and show what RAIVEN is doing (Summarizing with Haiku / Generating voice / Speaking), then dismiss when speech ends; also toggled by the tray **Settings** submenu. `false` restores the old disappear-at-play behavior |
 
 ### Auto-play, Play now/Abort, and Recent summaries
 
@@ -172,6 +174,32 @@ in `config.json`.
 The tray menu's **Recent summaries** submenu keeps the last 5 spoken summaries
 and replays any of them straight from cache - no new Claude call. This history
 is persisted to `%APPDATA%\Raiven\history.json`.
+
+### Playback status and the Stop/Hide buttons
+
+With `ShowPlaybackStatus` on (the default), the finished-turn toast stays on
+screen for the whole playback run: its progress bar text walks through
+"Summarizing with Haiku", "Loading voice model" (first playback after each
+start of RAIVEN; on the very first run this makes the one-time ~320 MB Kokoro
+download visible), "Generating voice", and
+"Speaking", and the toast dismisses itself when the voice finishes. The
+buttons are **Play now**, **Stop** (during the countdown: cancel auto-play;
+during playback: stop the voice), and **Hide** (dismiss the toast - the
+countdown and playback carry on). Swiping the toast away counts as Hide:
+RAIVEN keeps working but won't bring the toast back. Replaying from **Recent
+summaries** shows the same status toast, muted. Recent-summaries entries are
+labelled `04.07.2026 14:32 — project — chat topic`.
+
+### Bluetooth: first second of speech cut off
+
+Bluetooth devices drop their audio link when idle and take up to a second to
+re-open it - swallowing the start of RAIVEN's speech. Enable tray
+**Settings -> Keep audio device awake** (`KeepAudioAlive`) to play a
+continuous silent stream that keeps the link open. It follows the default
+output device if you connect headphones later. Trade-off: the headphones
+never auto-sleep, which costs battery. Note the stream is digital silence;
+it keeps the *link* awake, but a few speaker models additionally power-save
+on silent *content* - if yours still clips, open an issue.
 
 ### Question notifications
 

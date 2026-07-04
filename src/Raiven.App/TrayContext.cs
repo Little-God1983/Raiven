@@ -18,7 +18,8 @@ public sealed class TrayContext : ApplicationContext
         Action<SummaryHistoryEntry> replaySummary,
         Action testToast,
         Action testVoice,
-        Action<bool>? onPauseChanged = null)
+        Action<bool>? onPauseChanged = null,
+        Action<bool>? onKeepAudioAliveChanged = null)
     {
         var menu = new ContextMenuStrip();
 
@@ -43,7 +44,7 @@ public sealed class TrayContext : ApplicationContext
         menu.Opening += (_, _) => RebuildRecentSummaries(recentItem, history, replaySummary);
         RebuildRecentSummaries(recentItem, history, replaySummary);
 
-        var settingsItem = BuildSettingsMenu(config, saveConfig);
+        var settingsItem = BuildSettingsMenu(config, saveConfig, onKeepAudioAliveChanged);
 
         menu.Items.Add(pauseItem);
         menu.Items.Add(recentItem);
@@ -89,13 +90,13 @@ public sealed class TrayContext : ApplicationContext
         {
             var captured = entry;
             // Escape ampersands so headlines with '&' don't render as menu mnemonics.
-            var label = $"{captured.Headline} ({captured.Folder}, {captured.GeneratedAt.LocalDateTime:HH:mm})"
-                .Replace("&", "&&");
+            var label = captured.MenuLabel.Replace("&", "&&");
             parent.DropDownItems.Add(new ToolStripMenuItem(label, null, (_, _) => replaySummary(captured)));
         }
     }
 
-    private static ToolStripMenuItem BuildSettingsMenu(RaivenConfig config, Action saveConfig)
+    private static ToolStripMenuItem BuildSettingsMenu(
+        RaivenConfig config, Action saveConfig, Action<bool>? onKeepAudioAliveChanged)
     {
         var settings = new ToolStripMenuItem("Settings");
 
@@ -130,6 +131,29 @@ public sealed class TrayContext : ApplicationContext
         settings.DropDownItems.Add(new ToolStripSeparator());
         settings.DropDownItems.Add(turnVoice);
         settings.DropDownItems.Add(questionVoice);
+
+        var keepAlive = new ToolStripMenuItem("Keep audio device awake")
+        {
+            CheckOnClick = true,
+            Checked = config.KeepAudioAlive,
+        };
+        keepAlive.CheckedChanged += (_, _) =>
+        {
+            config.KeepAudioAlive = keepAlive.Checked;
+            saveConfig();
+            onKeepAudioAliveChanged?.Invoke(keepAlive.Checked);
+        };
+
+        var showStatus = new ToolStripMenuItem("Show playback status")
+        {
+            CheckOnClick = true,
+            Checked = config.ShowPlaybackStatus,
+        };
+        showStatus.CheckedChanged += (_, _) => { config.ShowPlaybackStatus = showStatus.Checked; saveConfig(); };
+
+        settings.DropDownItems.Add(new ToolStripSeparator());
+        settings.DropDownItems.Add(keepAlive);
+        settings.DropDownItems.Add(showStatus);
         return settings;
     }
 

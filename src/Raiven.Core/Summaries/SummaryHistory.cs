@@ -10,7 +10,13 @@ public sealed record SummaryHistoryEntry(
     DateTimeOffset GeneratedAt,
     string TranscriptPath,
     DateTime TranscriptLastWriteUtc,
-    string SummaryText);
+    string SummaryText)
+{
+    /// <summary>Tray menu label, e.g. "04.07.2026 14:32 — RAIVEN — Fix login bug".</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string MenuLabel =>
+        $"{GeneratedAt.LocalDateTime.ToString("dd.MM.yyyy HH:mm", System.Globalization.CultureInfo.InvariantCulture)} — {Folder} — {Headline}";
+}
 
 /// <summary>
 /// Last-N generated summaries, newest first, persisted to a JSON file so replays

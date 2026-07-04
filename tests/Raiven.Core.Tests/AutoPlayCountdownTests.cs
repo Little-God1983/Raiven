@@ -84,4 +84,17 @@ public class AutoPlayCountdownTests
             Assert.Contains("s2", expired);
         }
     }
+
+    [Fact]
+    public void CancelAll_ReturnsTheCanceledSessionIds()
+    {
+        using var countdown = new AutoPlayCountdown(TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(1));
+        countdown.Start("s1");
+        countdown.Start("s2");
+
+        var canceled = countdown.CancelAll();
+
+        Assert.Equal(["s1", "s2"], canceled.OrderBy(x => x));
+        Assert.Empty(countdown.CancelAll());
+    }
 }

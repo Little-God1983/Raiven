@@ -39,23 +39,23 @@ public sealed class QuestionPipeline(RaivenConfig config, IClaudeClient claude, 
             switch (config.QuestionVoice.ToLowerInvariant())
             {
                 case "message" when !string.IsNullOrWhiteSpace(evt.Message):
-                    voice.Speak(SpeechText.LimitWords(evt.Message, config.QuestionWordLimit));
+                    await voice.SpeakAsync(SpeechText.LimitWords(evt.Message, config.QuestionWordLimit));
                     return;
                 case "summary":
-                    voice.Speak(await SummarizeQuestionAsync(evt));
+                    await voice.SpeakAsync(await SummarizeQuestionAsync(evt));
                     return;
                 default: // "announce", "message" with empty message, and unknown values
                     if (!config.QuestionVoice.Equals("announce", StringComparison.OrdinalIgnoreCase) &&
                         !config.QuestionVoice.Equals("message", StringComparison.OrdinalIgnoreCase))
                         FileLog.Info($"Unknown QuestionVoice '{config.QuestionVoice}'; using announce");
-                    voice.Speak(announceLine);
+                    await voice.SpeakAsync(announceLine);
                     return;
             }
         }
         catch (Exception ex)
         {
             FileLog.Error($"Question announcement failed for {evt.SessionId}; falling back to announce line", ex);
-            try { voice.Speak(announceLine); }
+            try { await voice.SpeakAsync(announceLine); }
             catch (Exception voiceEx) { FileLog.Error("Fallback announcement also failed", voiceEx); }
         }
     }

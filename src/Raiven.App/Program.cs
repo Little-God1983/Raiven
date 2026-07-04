@@ -65,7 +65,7 @@ internal static class Program
                 FileLog.Info("Stale toast aborted; nothing to do.");
                 return;
             }
-            new AppSdkNotifier().ShowError("RAIVEN wasn't running - that session's summary is no longer available.");
+            new AppSdkNotifier(config).ShowError("RAIVEN wasn't running - that session's summary is no longer available.");
             Thread.Sleep(TimeSpan.FromSeconds(3));
             return;
         }
@@ -79,8 +79,10 @@ internal static class Program
 
         var state = new AppState();
         var registry = new SessionRegistry(TimeSpan.FromMinutes(config.SessionExpiryMinutes));
-        var notifier = new AppSdkNotifier();
+        var notifier = new AppSdkNotifier(config);
         var voice = new VoiceService(config);
+        using var keepAlive = new AudioKeepAlive();
+        if (config.KeepAudioAlive) keepAlive.Start();
 
         Raiven.Core.Summaries.IClaudeClient claude = config.SummaryBackend.Equals("api", StringComparison.OrdinalIgnoreCase)
             ? new Raiven.Core.Summaries.AnthropicClaudeClient(config.Model)
@@ -94,40 +96,45 @@ internal static class Program
             TimeSpan.FromSeconds(delaySeconds),
             TimeSpan.FromMilliseconds(500));
 
-        // Guards against a "Play now" click and the expiry timer firing near-simultaneously
-        // (before the toast disappears), which would otherwise launch two Claude calls and
-        // speak the summary twice. Stale Action Center clicks with no countdown running still
-        // play from cache — this only dedupes concurrent triggers for the same session.
-        var playing = new System.Collections.Concurrent.ConcurrentDictionary<string, byte>();
-        async Task PlayOnce(string id)
-        {
-            if (!playing.TryAdd(id, 0))
-            {
-                FileLog.Info($"Summary already in flight for {id}; ignoring duplicate trigger.");
-                return;
-            }
-            try { await pipeline.PlaySummaryAsync(id); }
-            finally { playing.TryRemove(id, out _); }
-        }
-
         countdown.Progress += (id, fraction) => notifier.UpdateCountdownProgress(id, fraction);
         countdown.Expired += id =>
         {
             if (state.Paused) return;
-            notifier.RemoveNotification(id);
-            _ = Task.Run(() => PlayOnce(id));
+            if (!config.ShowPlaybackStatus) notifier.RemoveNotification(id);
+            _ = Task.Run(() => pipeline.PlaySummaryAsync(id, userInitiated: false));
         };
         notifier.PlaySummaryRequested += id =>
         {
             countdown.Cancel(id);
-            notifier.RemoveNotification(id);
-            _ = Task.Run(() => PlayOnce(id));
+            if (!config.ShowPlaybackStatus) notifier.RemoveNotification(id);
+            _ = Task.Run(() => pipeline.PlaySummaryAsync(id, userInitiated: true));
         };
         notifier.AbortRequested += id =>
         {
             countdown.Cancel(id);
             notifier.RemoveNotification(id);
             FileLog.Info($"Auto-play aborted for {id}");
+        };
+        notifier.StopRequested += id =>
+        {
+            var hadCountdown = countdown.Cancel(id);
+            notifier.RemoveNotification(id);
+            // Countdown-phase Stop is an abort; playback-phase Stop halts the voice -
+            // but only when THIS session is the one speaking, so stopping session B's
+            // toast can never kill session A's speech. A Stop landing while the run is
+            // still preparing (summarizing/generating) marks the session instead, so
+            // the pipeline skips the speech when it gets there.
+            if (!hadCountdown)
+            {
+                if (pipeline.IsSpeaking(id)) voice.Stop();
+                else pipeline.RequestStop(id);
+            }
+            FileLog.Info($"Stop requested for {id} (countdown canceled: {hadCountdown})");
+        };
+        notifier.HideRequested += id =>
+        {
+            notifier.RemoveNotification(id);
+            FileLog.Info($"Status toast hidden for {id}");
         };
 
         Task HandleEvent(RaivenEvent evt)
@@ -145,6 +152,11 @@ internal static class Program
                     try { headline = TranscriptReader.ReadFirstPrompt(stop.TranscriptPath); }
                     catch (Exception ex) { FileLog.Error("Could not read chat headline", ex); }
 
+                    // This turn's toast supersedes any in-flight run for the session:
+                    // the old run must not remove or scribble on the new toast, and its
+                    // not-yet-started speech is obsolete. Audible speech keeps playing
+                    // until the new turn's own playback preempts it.
+                    pipeline.ObsoleteRun(stop.SessionId);
                     if (config.AutoPlaySummary)
                     {
                         // Cancel any prior countdown for this session first so a restarted
@@ -201,13 +213,20 @@ internal static class Program
                 config,
                 saveConfig: () => config.Save(AppPaths.ConfigFile),
                 history,
-                replaySummary: entry => Task.Run(() => voice.Speak(entry.SummaryText)),
+                replaySummary: entry => Task.Run(() => pipeline.PlayCachedAsync(entry)),
                 testToast: () => { ChimePlayer.Play(config); notifier.ShowFinished("test-session-001", "RAIVEN", "This is a test notification"); },
-                testVoice: () => Task.Run(() => voice.Speak("RAIVEN online. All systems operational.")),
-                onPauseChanged: paused => { if (paused) countdown.CancelAll(); }));
+                testVoice: () => Task.Run(() => voice.SpeakAsync("RAIVEN online. All systems operational.")),
+                onPauseChanged: paused =>
+                {
+                    if (!paused) return;
+                    foreach (var id in countdown.CancelAll())
+                        notifier.RemoveNotification(id);
+                },
+                onKeepAudioAliveChanged: on => { if (on) keepAlive.Start(); else keepAlive.Stop(); }));
         }
         finally
         {
+            notifier.RemoveLiveNotifications();
             listener.DisposeAsync().AsTask().GetAwaiter().GetResult();
             FileLog.Info("RAIVEN stopped.");
         }
@@ -215,7 +234,7 @@ internal static class Program
 
     private static void RunToastTest(RaivenConfig config)
     {
-        var notifier = new AppSdkNotifier();
+        var notifier = new AppSdkNotifier(config);
         notifier.PlaySummaryRequested += id => FileLog.Info($"TEST: play now requested for {id}");
         notifier.AbortRequested += id => FileLog.Info($"TEST: abort requested for {id}");
         ChimePlayer.Play(config);
@@ -233,7 +252,6 @@ internal static class Program
     {
         var voice = new VoiceService(config);
         FileLog.Info("Speaking test phrase...");
-        voice.Speak("RAIVEN online. All systems operational.");
-        Thread.Sleep(TimeSpan.FromSeconds(20)); // keep process alive while audio plays
+        voice.SpeakAsync("RAIVEN online. All systems operational.").GetAwaiter().GetResult();
     }
 }

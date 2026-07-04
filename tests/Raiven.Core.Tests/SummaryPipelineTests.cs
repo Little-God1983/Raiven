@@ -47,12 +47,20 @@ public class SummaryPipelineTests
     private sealed class FakeVoice : IVoice
     {
         public List<string> Spoken { get; } = [];
-        public Task SpeakAsync(string text, Action<VoicePhase>? onPhase = null)
+        public List<VoicePhase> PhasesToEmit { get; set; } = [VoicePhase.Generating, VoicePhase.Speaking];
+        public Task? Blocker;
+        public TaskCompletionSource SpeakEntered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public bool Stopped;
+        public async Task SpeakAsync(string text, Action<VoicePhase>? onPhase = null)
         {
+            foreach (var phase in PhasesToEmit)
+                onPhase?.Invoke(phase);
             Spoken.Add(text);
-            return Task.CompletedTask;
+            SpeakEntered.TrySetResult();
+            if (Blocker is not null)
+                await Blocker;
         }
-        public void Stop() { }
+        public void Stop() => Stopped = true;
     }
 
     private sealed class FakeClaudeClient : IClaudeClient
@@ -256,5 +264,184 @@ public class SummaryPipelineTests
         await pipeline.PlaySummaryAsync("s1");
 
         Assert.Equal(["Claude finished, but there was no message to read."], voice.Spoken);
+    }
+
+    [Fact]
+    public async Task PlaySummaryAsync_SummaryMode_EmitsStagesInOrderAndRemovesToast()
+    {
+        var registry = new SessionRegistry(TimeSpan.FromHours(4));
+        registry.Upsert("s1", WriteTranscript(), @"E:\Repos\RAIVEN", DateTimeOffset.Now);
+        var notifier = new FakeNotifier();
+        var pipeline = new SummaryPipeline(registry, new RaivenConfig(), new FakeClaudeClient(), notifier, new FakeVoice(), NewHistory());
+
+        await pipeline.PlaySummaryAsync("s1");
+
+        Assert.Equal(["Summarizing with Haiku…", "Generating voice…", "Speaking…"],
+            notifier.StatusUpdates.Select(u => u.Status));
+        Assert.Equal([0.25, 0.65, 0.9], notifier.StatusUpdates.Select(u => u.Fraction));
+        Assert.Contains("s1", notifier.Removed);
+    }
+
+    [Fact]
+    public async Task PlaySummaryAsync_LoadingModelPhase_ReportsLoadingStatus()
+    {
+        var registry = new SessionRegistry(TimeSpan.FromHours(4));
+        registry.Upsert("s1", WriteTranscript(), @"E:\Repos\RAIVEN", DateTimeOffset.Now);
+        var notifier = new FakeNotifier();
+        var voice = new FakeVoice
+        {
+            PhasesToEmit = [VoicePhase.LoadingModel, VoicePhase.Generating, VoicePhase.Speaking],
+        };
+        var pipeline = new SummaryPipeline(registry, new RaivenConfig(), new FakeClaudeClient(), notifier, voice, NewHistory());
+
+        await pipeline.PlaySummaryAsync("s1");
+
+        Assert.Contains(notifier.StatusUpdates, u => u.Status == "Loading voice model…" && u.Fraction == 0.45);
+    }
+
+    [Fact]
+    public async Task PlaySummaryAsync_MessageMode_SkipsHaikuStage()
+    {
+        var registry = new SessionRegistry(TimeSpan.FromHours(4));
+        registry.Upsert("s1", WriteTranscript(), @"E:\Repos\RAIVEN", DateTimeOffset.Now);
+        var notifier = new FakeNotifier();
+        var config = new RaivenConfig { FinishedTurnVoice = "message" };
+        var pipeline = new SummaryPipeline(registry, config, new FakeClaudeClient(), notifier, new FakeVoice(), NewHistory());
+
+        await pipeline.PlaySummaryAsync("s1");
+
+        Assert.Equal(["Generating voice…", "Speaking…"], notifier.StatusUpdates.Select(u => u.Status));
+    }
+
+    [Fact]
+    public async Task PlaySummaryAsync_CacheHit_SkipsHaikuStage()
+    {
+        var registry = new SessionRegistry(TimeSpan.FromHours(4));
+        registry.Upsert("s1", WriteTranscript(), @"E:\Repos\RAIVEN", DateTimeOffset.Now);
+        var notifier = new FakeNotifier();
+        var pipeline = new SummaryPipeline(registry, new RaivenConfig(), new FakeClaudeClient(), notifier, new FakeVoice(), NewHistory());
+
+        await pipeline.PlaySummaryAsync("s1");
+        notifier.StatusUpdates.Clear();
+        await pipeline.PlaySummaryAsync("s1"); // cached now
+
+        Assert.Equal(["Generating voice…", "Speaking…"], notifier.StatusUpdates.Select(u => u.Status));
+    }
+
+    [Fact]
+    public async Task PlaySummaryAsync_StatusOff_MakesNoStatusCalls()
+    {
+        var registry = new SessionRegistry(TimeSpan.FromHours(4));
+        registry.Upsert("s1", WriteTranscript(), @"E:\Repos\RAIVEN", DateTimeOffset.Now);
+        var notifier = new FakeNotifier();
+        var config = new RaivenConfig { ShowPlaybackStatus = false };
+        var voice = new FakeVoice();
+        var pipeline = new SummaryPipeline(registry, config, new FakeClaudeClient(), notifier, voice, NewHistory());
+
+        await pipeline.PlaySummaryAsync("s1");
+
+        Assert.Empty(notifier.StatusShown);
+        Assert.Empty(notifier.StatusUpdates);
+        Assert.Empty(notifier.Removed);
+        Assert.Single(voice.Spoken); // playback itself still happens
+    }
+
+    [Fact]
+    public async Task PlaySummaryAsync_DeadToastUserInitiated_ShowsFreshStatusToast()
+    {
+        var registry = new SessionRegistry(TimeSpan.FromHours(4));
+        registry.Upsert("s1", WriteTranscript(), @"E:\Repos\RAIVEN", DateTimeOffset.Now);
+        var notifier = new FakeNotifier { ToastLive = false };
+        var pipeline = new SummaryPipeline(registry, new RaivenConfig(), new FakeClaudeClient(), notifier, new FakeVoice(), NewHistory());
+
+        await pipeline.PlaySummaryAsync("s1", userInitiated: true);
+
+        Assert.Single(notifier.StatusShown);
+    }
+
+    [Fact]
+    public async Task PlaySummaryAsync_DeadToastContinuation_NeverResurrectsToast()
+    {
+        var registry = new SessionRegistry(TimeSpan.FromHours(4));
+        registry.Upsert("s1", WriteTranscript(), @"E:\Repos\RAIVEN", DateTimeOffset.Now);
+        var notifier = new FakeNotifier { ToastLive = false };
+        var voice = new FakeVoice();
+        var pipeline = new SummaryPipeline(registry, new RaivenConfig(), new FakeClaudeClient(), notifier, voice, NewHistory());
+
+        await pipeline.PlaySummaryAsync("s1", userInitiated: false);
+
+        Assert.Empty(notifier.StatusShown);
+        Assert.Single(voice.Spoken); // playback still happens, just without a toast
+    }
+
+    [Fact]
+    public async Task PlaySummaryAsync_LiveToast_IsReusedNotReShown()
+    {
+        var registry = new SessionRegistry(TimeSpan.FromHours(4));
+        registry.Upsert("s1", WriteTranscript(), @"E:\Repos\RAIVEN", DateTimeOffset.Now);
+        var notifier = new FakeNotifier { ToastLive = true };
+        var pipeline = new SummaryPipeline(registry, new RaivenConfig(), new FakeClaudeClient(), notifier, new FakeVoice(), NewHistory());
+
+        await pipeline.PlaySummaryAsync("s1", userInitiated: false);
+
+        Assert.Empty(notifier.StatusShown);
+        Assert.NotEmpty(notifier.StatusUpdates); // stages ride the existing toast
+    }
+
+    [Fact]
+    public async Task PlaySummaryAsync_ClaudeFails_StillRemovesToast()
+    {
+        var registry = new SessionRegistry(TimeSpan.FromHours(4));
+        registry.Upsert("s1", WriteTranscript(), @"E:\Repos\RAIVEN", DateTimeOffset.Now);
+        var notifier = new FakeNotifier();
+        var claude = new FakeClaudeClient { Throws = new InvalidOperationException("boom") };
+        var pipeline = new SummaryPipeline(registry, new RaivenConfig(), claude, notifier, new FakeVoice(), NewHistory());
+
+        await pipeline.PlaySummaryAsync("s1");
+
+        Assert.Contains("s1", notifier.Removed);
+        Assert.Contains(notifier.Errors, e => e.Contains("Couldn't get the summary"));
+    }
+
+    [Fact]
+    public async Task PlayCachedAsync_SpeaksEntryWithStagesAndNoClaudeCall()
+    {
+        var notifier = new FakeNotifier();
+        var claude = new FakeClaudeClient();
+        var voice = new FakeVoice();
+        var pipeline = new SummaryPipeline(
+            new SessionRegistry(TimeSpan.FromHours(4)), new RaivenConfig(), claude, notifier, voice, NewHistory());
+        var entry = new SummaryHistoryEntry(
+            "sX", "Fix login bug", "RAIVEN", DateTimeOffset.Now, @"C:\t.jsonl", DateTime.UtcNow, "cached text");
+
+        await pipeline.PlayCachedAsync(entry);
+
+        Assert.Equal(["cached text"], voice.Spoken);
+        Assert.Equal(0, claude.Calls);
+        Assert.Single(notifier.StatusShown);
+        Assert.Equal(["Generating voice…", "Speaking…"], notifier.StatusUpdates.Select(u => u.Status));
+        Assert.Contains("sX", notifier.Removed);
+    }
+
+    [Fact]
+    public async Task IsSpeaking_TrueWhileSpeechPending_FalseAfter()
+    {
+        var registry = new SessionRegistry(TimeSpan.FromHours(4));
+        registry.Upsert("s1", WriteTranscript(), @"E:\Repos\RAIVEN", DateTimeOffset.Now);
+        var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var voice = new FakeVoice { Blocker = gate.Task };
+        var pipeline = new SummaryPipeline(
+            registry, new RaivenConfig(), new FakeClaudeClient(), new FakeNotifier(), voice, NewHistory());
+
+        var play = pipeline.PlaySummaryAsync("s1");
+        await voice.SpeakEntered.Task;
+
+        Assert.True(pipeline.IsSpeaking("s1"));
+        Assert.False(pipeline.IsSpeaking("other"));
+
+        gate.SetResult();
+        await play;
+
+        Assert.False(pipeline.IsSpeaking("s1"));
     }
 }

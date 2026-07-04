@@ -11,7 +11,12 @@ public class QuestionPipelineTests
     private sealed class FakeVoice : IVoice
     {
         public List<string> Spoken { get; } = [];
-        public void Speak(string text) => Spoken.Add(text);
+        public Task SpeakAsync(string text, Action<VoicePhase>? onPhase = null)
+        {
+            Spoken.Add(text);
+            return Task.CompletedTask;
+        }
+        public void Stop() { }
     }
 
     private sealed class FakeClaudeClient : IClaudeClient

@@ -31,7 +31,7 @@ public sealed class SummaryPipeline(
             if (history.TryGetCached(sessionId, lastWriteUtc, out var cached))
             {
                 FileLog.Info($"Replaying cached summary for {sessionId}");
-                voice.Speak(cached.SummaryText);
+                await voice.SpeakAsync(cached.SummaryText);
                 return;
             }
 
@@ -60,7 +60,7 @@ public sealed class SummaryPipeline(
             history.Add(new SummaryHistoryEntry(
                 sessionId, headline, folder, DateTimeOffset.Now, info.TranscriptPath, lastWriteUtc, spokenText));
 
-            voice.Speak(spokenText);
+            await voice.SpeakAsync(spokenText);
         }
         catch (Exception ex)
         {

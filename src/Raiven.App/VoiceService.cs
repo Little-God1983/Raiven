@@ -12,13 +12,16 @@ public sealed class VoiceService(RaivenConfig config) : IVoice
     private KokoroTTS? _tts;
     private KokoroVoice? _voice;
 
-    // KokoroSharp stops any in-flight playback before speaking - see IVoice.Speak.
-    public void Speak(string text)
+    // KokoroSharp stops any in-flight playback before speaking - see IVoice.SpeakAsync.
+    public async Task SpeakAsync(string text, Action<VoicePhase>? onPhase = null)
     {
+        var tcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        SynthesisHandle handle;
         lock (_lock)
         {
             if (_tts is null)
             {
+                onPhase?.Invoke(VoicePhase.LoadingModel);
                 // KokoroSharp has no overload that both accepts an explicit path AND
                 // auto-downloads: LoadModel(string path) only loads an existing file
                 // (it throws if missing, it never downloads), while the download-capable
@@ -54,7 +57,24 @@ public sealed class VoiceService(RaivenConfig config) : IVoice
                 }
                 FileLog.Info($"Kokoro ready with voice '{config.Voice}'.");
             }
-            _tts.SpeakFast(text, _voice!);
+            onPhase?.Invoke(VoicePhase.Generating);
+            handle = _tts.SpeakFast(text, _voice!);
         }
+
+        // Handle callbacks are plain delegate fields; += preserves any library-installed
+        // ones. They attach just after SpeakFast returns, so an (unrealistically) instant
+        // completion could slip past them - the cap below completes the task even then.
+        handle.OnSpeechStarted += _ => onPhase?.Invoke(VoicePhase.Speaking);
+        handle.OnSpeechCompleted += _ => tcs.TrySetResult();
+        handle.OnSpeechCanceled += _ => tcs.TrySetResult();
+
+        var words = text.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length;
+        var cap = TimeSpan.FromSeconds(60 + words / 2.0); // ~2x real speech duration; a stuck awaiter is worse than an early cleanup
+        await Task.WhenAny(tcs.Task, Task.Delay(cap)).ConfigureAwait(false);
+    }
+
+    public void Stop()
+    {
+        lock (_lock) _tts?.StopPlayback();
     }
 }

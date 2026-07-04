@@ -201,9 +201,9 @@ internal static class Program
                 config,
                 saveConfig: () => config.Save(AppPaths.ConfigFile),
                 history,
-                replaySummary: entry => Task.Run(() => voice.Speak(entry.SummaryText)),
+                replaySummary: entry => Task.Run(() => voice.SpeakAsync(entry.SummaryText)),
                 testToast: () => { ChimePlayer.Play(config); notifier.ShowFinished("test-session-001", "RAIVEN", "This is a test notification"); },
-                testVoice: () => Task.Run(() => voice.Speak("RAIVEN online. All systems operational.")),
+                testVoice: () => Task.Run(() => voice.SpeakAsync("RAIVEN online. All systems operational.")),
                 onPauseChanged: paused => { if (paused) countdown.CancelAll(); }));
         }
         finally
@@ -233,7 +233,6 @@ internal static class Program
     {
         var voice = new VoiceService(config);
         FileLog.Info("Speaking test phrase...");
-        voice.Speak("RAIVEN online. All systems operational.");
-        Thread.Sleep(TimeSpan.FromSeconds(20)); // keep process alive while audio plays
+        voice.SpeakAsync("RAIVEN online. All systems operational.").GetAwaiter().GetResult();
     }
 }

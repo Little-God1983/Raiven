@@ -4,4 +4,10 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <LangVersion>latest</LangVersion>
   </PropertyGroup>
+
+  <PropertyGroup>
+    <RaivenVersionFile>$(MSBuildThisFileDirectory)VERSION</RaivenVersionFile>
+    <Version Condition="Exists('$(RaivenVersionFile)')">$([System.IO.File]::ReadAllText('$(RaivenVersionFile)').Trim())</Version>
+    <Version Condition="!Exists('$(RaivenVersionFile)')">1.0.0</Version>
+  </PropertyGroup>
 </Project>

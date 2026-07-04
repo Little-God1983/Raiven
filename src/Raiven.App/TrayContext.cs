@@ -186,6 +186,8 @@ public sealed class TrayContext : ApplicationContext
         const int logoSize = 48;
         const int panelWidth = 200;
         const int panelHeight = 78;
+        const int textLeft = 70;
+        const int textWidth = 120;
 
         var panel = new Panel
         {
@@ -200,7 +202,7 @@ public sealed class TrayContext : ApplicationContext
             Image = LoadHeaderBitmap(logoSize),
             SizeMode = PictureBoxSizeMode.Zoom,
             Size = new Size(logoSize, logoSize),
-            Location = new Point((panelWidth - logoSize) / 2, 6),
+            Location = new Point(12, (panelHeight - logoSize) / 2),
             Cursor = Cursors.Hand,
             BackColor = Color.Transparent,
         };
@@ -211,14 +213,27 @@ public sealed class TrayContext : ApplicationContext
             Font = new Font(SystemFonts.MenuFont ?? SystemFonts.DefaultFont, FontStyle.Bold),
             ForeColor = Color.FromArgb(196, 152, 255),
             BackColor = Color.Transparent,
-            TextAlign = ContentAlignment.MiddleCenter,
-            Dock = DockStyle.Bottom,
-            Height = 20,
+            TextAlign = ContentAlignment.MiddleLeft,
+            Location = new Point(textLeft, 18),
+            Size = new Size(textWidth, 22),
+            Cursor = Cursors.Hand,
+        };
+
+        var versionLabel = new Label
+        {
+            Text = $"v{AppVersion.Display}",
+            Font = new Font(SystemFonts.MenuFont ?? SystemFonts.DefaultFont, FontStyle.Regular),
+            ForeColor = Color.FromArgb(150, 150, 150),
+            BackColor = Color.Transparent,
+            TextAlign = ContentAlignment.MiddleLeft,
+            Location = new Point(textLeft, 40),
+            Size = new Size(textWidth, 18),
             Cursor = Cursors.Hand,
         };
 
         panel.Controls.Add(picture);
         panel.Controls.Add(label);
+        panel.Controls.Add(versionLabel);
 
         void OpenRepository(object? sender, EventArgs e)
         {
@@ -237,6 +252,7 @@ public sealed class TrayContext : ApplicationContext
         panel.Click += OpenRepository;
         picture.Click += OpenRepository;
         label.Click += OpenRepository;
+        versionLabel.Click += OpenRepository;
 
         return new ToolStripControlHost(panel)
         {

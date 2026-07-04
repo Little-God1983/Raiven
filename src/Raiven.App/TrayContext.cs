@@ -89,8 +89,7 @@ public sealed class TrayContext : ApplicationContext
         {
             var captured = entry;
             // Escape ampersands so headlines with '&' don't render as menu mnemonics.
-            var label = $"{captured.Headline} ({captured.Folder}, {captured.GeneratedAt.LocalDateTime:HH:mm})"
-                .Replace("&", "&&");
+            var label = captured.MenuLabel.Replace("&", "&&");
             parent.DropDownItems.Add(new ToolStripMenuItem(label, null, (_, _) => replaySummary(captured)));
         }
     }

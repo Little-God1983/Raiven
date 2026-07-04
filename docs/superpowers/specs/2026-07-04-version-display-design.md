@@ -21,9 +21,11 @@ its right.
 
 ## 2. Build-time wiring
 
-New `Directory.Build.props` at the repo root. MSBuild auto-applies a
-`Directory.Build.props` at the root to every project below it, so both
-`Raiven.Core` and `Raiven.App` pick this up with no `.csproj` edits:
+`Directory.Build.props` already exists at the repo root (it currently only
+sets `Nullable`/`ImplicitUsings`/`LangVersion` for every project). MSBuild
+auto-applies it to every project below it, so adding a version property
+group there reaches both `Raiven.Core` and `Raiven.App` with no `.csproj`
+edits and no change to its existing settings:
 
 ```xml
 <Project>

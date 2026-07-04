@@ -70,9 +70,10 @@ public sealed class AudioKeepAlive : IDisposable
     private void StartStreamLocked()
     {
         if (!_shouldRun || _output is not null) return;
+        WaveOutEvent? output = null;
         try
         {
-            var output = new WaveOutEvent();
+            output = new WaveOutEvent();
             output.Init(new SilenceProvider(new WaveFormat(44100, 16, 2)));
             output.PlaybackStopped += OnPlaybackStopped;
             output.Play();
@@ -82,6 +83,7 @@ public sealed class AudioKeepAlive : IDisposable
         catch (Exception ex)
         {
             FileLog.Error("Audio keep-alive could not start (will retry on the next device change)", ex);
+            try { output?.Dispose(); } catch { /* best-effort cleanup of a partially constructed player */ }
             _output = null;
         }
     }

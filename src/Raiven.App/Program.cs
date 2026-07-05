@@ -137,6 +137,21 @@ internal static class Program
             FileLog.Info($"Status toast hidden for {id}");
         };
 
+        // Chime + toast + immediate voice for a question (permission prompt, idle, or an
+        // AskUserQuestion dialog). Shared by the Notification and AskUserQuestion branches.
+        void AnnounceQuestion(ClaudeNotificationEvent q)
+        {
+            if (!config.NotifyOnQuestion || state.Paused) return;
+            ChimePlayer.Play(config);
+            var folder = Path.GetFileName(q.Cwd.TrimEnd('\\', '/'));
+            var folderName = folder.Length > 0 ? folder : q.Cwd;
+            string? headline = null;
+            try { headline = TranscriptReader.ReadFirstPrompt(q.TranscriptPath); }
+            catch (Exception ex) { FileLog.Error("Could not read chat headline", ex); }
+            notifier.ShowQuestion(folderName, headline, q.Message);
+            _ = Task.Run(() => questions.AnnounceAsync(q));
+        }
+
         Task HandleEvent(RaivenEvent evt)
         {
             if (EventParser.TryParseClaudeStop(evt, out var stop))
@@ -174,17 +189,15 @@ internal static class Program
             else if (EventParser.TryParseClaudeNotification(evt, out var question))
             {
                 FileLog.Info($"Notification event for session {question.SessionId}: [{question.NotificationType ?? "unknown"}] {question.Message}");
-                if (QuestionPipeline.IsQuestion(question.NotificationType) && config.NotifyOnQuestion && !state.Paused)
-                {
-                    ChimePlayer.Play(config);
-                    var folder = Path.GetFileName(question.Cwd.TrimEnd('\\', '/'));
-                    var folderName = folder.Length > 0 ? folder : question.Cwd;
-                    string? headline = null;
-                    try { headline = TranscriptReader.ReadFirstPrompt(question.TranscriptPath); }
-                    catch (Exception ex) { FileLog.Error("Could not read chat headline", ex); }
-                    notifier.ShowQuestion(folderName, headline, question.Message);
-                    _ = Task.Run(() => questions.AnnounceAsync(question));
-                }
+                if (QuestionPipeline.IsQuestion(question.NotificationType))
+                    AnnounceQuestion(question);
+            }
+            else if (EventParser.TryParseClaudeAskUserQuestion(evt, out var askQuestion))
+            {
+                // AskUserQuestion dialogs fire no Notification/Stop hook, so without this
+                // branch RAIVEN stays silent on them. Always a question - no ignore-list filter.
+                FileLog.Info($"AskUserQuestion event for session {askQuestion.SessionId}: {askQuestion.Message}");
+                AnnounceQuestion(askQuestion);
             }
             else
             {

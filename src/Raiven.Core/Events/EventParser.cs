@@ -65,6 +65,57 @@ public static class EventParser
         return true;
     }
 
+    /// <summary>
+    /// The interactive AskUserQuestion dialog fires no Notification hook (and no Stop -
+    /// the turn continues once answered), only a PreToolUse hook with
+    /// tool_name "AskUserQuestion". We surface it from that hook as a question so RAIVEN
+    /// still chimes/announces. The question text is pulled from tool_input.questions[].question.
+    /// </summary>
+    public static bool TryParseClaudeAskUserQuestion(RaivenEvent e, out ClaudeNotificationEvent question)
+    {
+        question = null!;
+        if (e.Source != "claude-code" || e.Type != "PreToolUse")
+            return false;
+        // Matcher-based hook registration should already scope this to AskUserQuestion,
+        // but re-check so a broader PreToolUse registration can never misfire.
+        if (!TryGetString(e.Payload, "tool_name", out var toolName) ||
+            !string.Equals(toolName, "AskUserQuestion", StringComparison.Ordinal))
+            return false;
+        if (!TryGetString(e.Payload, "session_id", out var sessionId) ||
+            !TryGetString(e.Payload, "transcript_path", out var transcriptPath) ||
+            !TryGetString(e.Payload, "cwd", out var cwd))
+            return false;
+
+        var message = ExtractAskUserQuestionText(e.Payload);
+        question = new ClaudeNotificationEvent(sessionId, transcriptPath, cwd, message, "ask_user_question");
+        return true;
+    }
+
+    /// <summary>Joins the question prompts from tool_input.questions[]; "" when absent/malformed.</summary>
+    private static string ExtractAskUserQuestionText(JsonElement payload)
+    {
+        if (payload.ValueKind != JsonValueKind.Object ||
+            !payload.TryGetProperty("tool_input", out var toolInput) ||
+            toolInput.ValueKind != JsonValueKind.Object ||
+            !toolInput.TryGetProperty("questions", out var questions) ||
+            questions.ValueKind != JsonValueKind.Array)
+            return "";
+
+        var texts = new List<string>();
+        foreach (var q in questions.EnumerateArray())
+        {
+            if (q.ValueKind == JsonValueKind.Object &&
+                q.TryGetProperty("question", out var qt) &&
+                qt.ValueKind == JsonValueKind.String)
+            {
+                var text = qt.GetString();
+                if (!string.IsNullOrWhiteSpace(text))
+                    texts.Add(text.Trim());
+            }
+        }
+        return string.Join(" ", texts);
+    }
+
     private static bool TryGetString(JsonElement obj, string name, out string value)
     {
         value = null!;

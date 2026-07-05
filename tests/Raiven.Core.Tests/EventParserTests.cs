@@ -115,4 +115,73 @@ public class EventParserTests
 
         Assert.False(EventParser.TryParseClaudeNotification(evt, out _));
     }
+
+    // AskUserQuestion is the interactive multiple-choice dialog. It fires no
+    // Notification hook (and no Stop, since the turn continues), only a
+    // PreToolUse hook with tool_name "AskUserQuestion" - so we surface it from
+    // that hook and treat it like a question notification.
+    private const string AskUserQuestionHookJson = """
+        {"hook_event_name":"PreToolUse","session_id":"s1","transcript_path":"C:\\t.jsonl","cwd":"E:\\Repos\\RAIVEN","tool_name":"AskUserQuestion","tool_input":{"questions":[{"question":"How do you want to sequence this?","header":"Sequencing","options":[{"label":"Publish SDK first","description":"aa"},{"label":"UI shell now","description":"bb"}]}]}}
+        """;
+
+    [Fact]
+    public void TryParseClaudeAskUserQuestion_FullPayload_ExtractsFieldsAndQuestionText()
+    {
+        var evt = EventParser.Parse(AskUserQuestionHookJson);
+
+        Assert.True(EventParser.TryParseClaudeAskUserQuestion(evt, out var q));
+        Assert.Equal("s1", q.SessionId);
+        Assert.Equal(@"C:\t.jsonl", q.TranscriptPath);
+        Assert.Equal(@"E:\Repos\RAIVEN", q.Cwd);
+        Assert.Equal("How do you want to sequence this?", q.Message);
+        Assert.Equal("ask_user_question", q.NotificationType);
+    }
+
+    [Fact]
+    public void TryParseClaudeAskUserQuestion_MultipleQuestions_JoinsText()
+    {
+        var evt = EventParser.Parse(
+            """{"hook_event_name":"PreToolUse","session_id":"s1","transcript_path":"C:\\t.jsonl","cwd":"E:\\Repos\\RAIVEN","tool_name":"AskUserQuestion","tool_input":{"questions":[{"question":"First question?","header":"One"},{"question":"Second question?","header":"Two"}]}}""");
+
+        Assert.True(EventParser.TryParseClaudeAskUserQuestion(evt, out var q));
+        Assert.Contains("First question?", q.Message);
+        Assert.Contains("Second question?", q.Message);
+    }
+
+    [Fact]
+    public void TryParseClaudeAskUserQuestion_MissingQuestions_ParsesWithEmptyMessage()
+    {
+        var evt = EventParser.Parse(
+            """{"hook_event_name":"PreToolUse","session_id":"s1","transcript_path":"C:\\t.jsonl","cwd":"E:\\Repos\\RAIVEN","tool_name":"AskUserQuestion","tool_input":{}}""");
+
+        Assert.True(EventParser.TryParseClaudeAskUserQuestion(evt, out var q));
+        Assert.Equal("", q.Message);
+    }
+
+    [Fact]
+    public void TryParseClaudeAskUserQuestion_OtherTool_ReturnsFalse()
+    {
+        var evt = EventParser.Parse(
+            """{"hook_event_name":"PreToolUse","session_id":"s1","transcript_path":"C:\\t.jsonl","cwd":"E:\\Repos\\RAIVEN","tool_name":"Bash","tool_input":{"command":"npm test"}}""");
+
+        Assert.False(EventParser.TryParseClaudeAskUserQuestion(evt, out _));
+    }
+
+    [Fact]
+    public void TryParseClaudeAskUserQuestion_NotPreToolUse_ReturnsFalse()
+    {
+        var evt = EventParser.Parse(
+            """{"hook_event_name":"Notification","session_id":"s1","transcript_path":"C:\\t.jsonl","cwd":"E:\\Repos\\RAIVEN"}""");
+
+        Assert.False(EventParser.TryParseClaudeAskUserQuestion(evt, out _));
+    }
+
+    [Fact]
+    public void TryParseClaudeAskUserQuestion_MissingRequiredField_ReturnsFalse()
+    {
+        var evt = EventParser.Parse(
+            """{"hook_event_name":"PreToolUse","session_id":"s1","tool_name":"AskUserQuestion","tool_input":{"questions":[{"question":"Q?"}]}}""");
+
+        Assert.False(EventParser.TryParseClaudeAskUserQuestion(evt, out _));
+    }
 }

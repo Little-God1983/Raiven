@@ -81,12 +81,15 @@ finishes - it's a one-time, global change that applies to every Claude Code
 session on the machine, in any editor or terminal. Restart any Claude Code
 sessions that were already running so they pick up the change.
 
-The snippet registers **two** hooks: `Stop` (finished-turn notifications)
-and `Notification` (question notifications - Claude Code waiting for
-permission or input). If you set RAIVEN up before question notifications
-existed, re-merge the updated `docs/hook-snippet.json` to add the
-`Notification` entry alongside your existing `Stop` entry - otherwise you'll
-keep getting finished-turn notifications but never question notifications.
+The snippet registers **three** hooks, all pointing at RAIVEN's listener:
+`Stop` (finished-turn notifications), `Notification` (permission prompts and
+idle/input waits), and `PreToolUse` scoped by `matcher` to the
+`AskUserQuestion` tool - Claude Code's interactive multiple-choice dialog,
+which fires neither a `Stop` (the turn continues once you answer) nor a
+`Notification` hook of its own. If you set RAIVEN up before any of these
+entries existed, re-merge the updated `docs/hook-snippet.json` so all three
+are present - otherwise that notification type silently never fires (e.g.
+finished turns notify, but the `AskUserQuestion` popup stays silent).
 
 ### 4. Confirm Claude credentials are in place
 
@@ -203,8 +206,9 @@ on silent *content* - if yours still clips, open an issue.
 
 ### Question notifications
 
-When Claude Code has a question - a permission prompt, or it's waiting on
-input - RAIVEN chimes, shows a toast, and speaks immediately (no countdown,
+When Claude Code has a question - a permission prompt, an interactive
+multiple-choice dialog (`AskUserQuestion`), or it's waiting on input - RAIVEN
+chimes, shows a toast, and speaks immediately (no countdown,
 no history entry - unlike finished-turn summaries). Because a new voice line
 always preempts whatever is currently playing, a question announcement can
 interrupt a summary that is still being read aloud; an interrupted summary

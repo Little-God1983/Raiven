@@ -31,6 +31,46 @@ public class SummaryHistoryTests
     }
 
     [Fact]
+    public void Load_DefaultCapacity_IsTen()
+    {
+        var history = SummaryHistory.Load(TempHistoryPath());
+        for (var i = 1; i <= 12; i++)
+            history.Add(Entry($"s{i}"));
+
+        Assert.Equal(10, history.Entries.Count);
+    }
+
+    [Fact]
+    public void SetCapacity_Lower_TrimsAndPersists()
+    {
+        var path = TempHistoryPath();
+        var history = SummaryHistory.Load(path, capacity: 10);
+        for (var i = 1; i <= 10; i++)
+            history.Add(Entry($"s{i}"));
+
+        history.SetCapacity(3);
+
+        Assert.Equal(3, history.Entries.Count);
+        Assert.Equal("s10", history.Entries[0].SessionId); // newest kept
+        var reloaded = SummaryHistory.Load(path, capacity: 10);
+        Assert.Equal(3, reloaded.Entries.Count); // trim was persisted to disk
+    }
+
+    [Fact]
+    public void SetCapacity_Raise_KeepsExistingAndAllowsMore()
+    {
+        var history = SummaryHistory.Load(TempHistoryPath(), capacity: 3);
+        for (var i = 1; i <= 3; i++)
+            history.Add(Entry($"s{i}"));
+
+        history.SetCapacity(5);
+        history.Add(Entry("s4"));
+        history.Add(Entry("s5"));
+
+        Assert.Equal(5, history.Entries.Count);
+    }
+
+    [Fact]
     public void Add_KeepsNewestFirst_AndTrimsToCapacity()
     {
         var history = SummaryHistory.Load(TempHistoryPath(), capacity: 5);

@@ -429,6 +429,38 @@ public class SummaryPipelineTests
     }
 
     [Fact]
+    public async Task PlaySummaryAsync_CannedSession_SpeaksTextWithoutRegistryClaudeOrHistory()
+    {
+        var claude = new FakeClaudeClient();
+        var voice = new FakeVoice();
+        var history = NewHistory();
+        var pipeline = new SummaryPipeline(
+            new SessionRegistry(TimeSpan.FromHours(4)), new RaivenConfig(), claude, new FakeNotifier(), voice, history);
+        pipeline.RegisterCanned("test-session-001", "RAIVEN", "Test notification", "This is a summary test by RAIVEN.");
+
+        await pipeline.PlaySummaryAsync("test-session-001");
+
+        Assert.Equal(["This is a summary test by RAIVEN."], voice.Spoken);
+        Assert.Equal(0, claude.Calls);      // no Claude call for canned text
+        Assert.Empty(history.Entries);      // canned playback is never persisted to Recent summaries
+    }
+
+    [Fact]
+    public async Task PlaySummaryAsync_CannedSession_ShowsAndRemovesStatusToast()
+    {
+        var notifier = new FakeNotifier();
+        var pipeline = new SummaryPipeline(
+            new SessionRegistry(TimeSpan.FromHours(4)), new RaivenConfig(), new FakeClaudeClient(), notifier, new FakeVoice(), NewHistory());
+        pipeline.RegisterCanned("test-session-001", "RAIVEN", "Test notification", "This is a summary test by RAIVEN.");
+
+        await pipeline.PlaySummaryAsync("test-session-001", userInitiated: true);
+
+        Assert.Single(notifier.StatusShown);
+        Assert.Empty(notifier.Errors); // never hits the "no longer available" path
+        Assert.Contains("test-session-001", notifier.Removed);
+    }
+
+    [Fact]
     public async Task IsSpeaking_TrueWhileSpeechPending_FalseAfter()
     {
         var registry = new SessionRegistry(TimeSpan.FromHours(4));

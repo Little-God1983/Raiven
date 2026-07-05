@@ -28,6 +28,9 @@ public sealed class SummaryPipeline(
     // in-flight run (ObsoleteRun): an obsolete run stops updating the toast, never
     // starts speaking, and leaves toast removal to its successor.
     private readonly ConcurrentDictionary<string, Guid> _currentRun = new();
+    // Sessions whose summary is fixed text (the Test notification): played through the
+    // normal toast + voice path but with no registry lookup, Claude call, or history write.
+    private readonly ConcurrentDictionary<string, (string Folder, string Headline, string Text)> _canned = new();
 
     /// <summary>Whether this session's text is the one currently being generated/spoken.</summary>
     public bool IsSpeaking(string sessionId) => Volatile.Read(ref _speakingSessionId) == sessionId;
@@ -42,6 +45,11 @@ public sealed class SummaryPipeline(
 
     private bool IsCurrentRun(string sessionId, Guid token) =>
         _currentRun.TryGetValue(sessionId, out var current) && current == token;
+
+    /// <summary>Register fixed summary text for a session (the Test notification), so
+    /// PlaySummaryAsync speaks it without touching the registry, Claude, or history.</summary>
+    public void RegisterCanned(string sessionId, string folder, string headline, string text) =>
+        _canned[sessionId] = (folder, headline, text);
 
     public Task PlaySummaryAsync(string sessionId) => PlaySummaryAsync(sessionId, userInitiated: true);
 
@@ -63,6 +71,22 @@ public sealed class SummaryPipeline(
         _currentRun[sessionId] = runToken;
         try
         {
+            if (_canned.TryGetValue(sessionId, out var canned))
+            {
+                EnsureStatusToast(sessionId, canned.Folder, canned.Headline, userInitiated);
+                try
+                {
+                    _generating.TryRemove(sessionId, out _); generatingReleased = true;
+                    await SpeakWithPhasesAsync(sessionId, runToken, canned.Text);
+                }
+                finally
+                {
+                    if (config.ShowPlaybackStatus && IsCurrentRun(sessionId, runToken))
+                        notifier.RemoveNotification(sessionId);
+                }
+                return;
+            }
+
             if (!registry.TryGet(sessionId, DateTimeOffset.Now, out var info))
             {
                 notifier.ShowError("That session's details are no longer available.");

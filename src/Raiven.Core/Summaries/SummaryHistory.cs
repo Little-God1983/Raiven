@@ -27,7 +27,7 @@ public sealed class SummaryHistory
     private static readonly JsonSerializerOptions Options = new() { WriteIndented = true };
 
     private readonly string _filePath;
-    private readonly int _capacity;
+    private int _capacity;
     private readonly List<SummaryHistoryEntry> _entries;
     private readonly Lock _lock = new();
 
@@ -38,7 +38,7 @@ public sealed class SummaryHistory
         _entries = entries;
     }
 
-    public static SummaryHistory Load(string filePath, int capacity = 5)
+    public static SummaryHistory Load(string filePath, int capacity = 10)
     {
         List<SummaryHistoryEntry> entries = [];
         try
@@ -60,6 +60,20 @@ public sealed class SummaryHistory
     public IReadOnlyList<SummaryHistoryEntry> Entries
     {
         get { lock (_lock) return _entries.ToList(); }
+    }
+
+    /// <summary>Change how many entries are kept; trims and persists immediately if lowered.</summary>
+    public void SetCapacity(int capacity)
+    {
+        lock (_lock)
+        {
+            _capacity = Math.Max(1, capacity);
+            if (_entries.Count > _capacity)
+            {
+                _entries.RemoveRange(_capacity, _entries.Count - _capacity);
+                Save();
+            }
+        }
     }
 
     public void Add(SummaryHistoryEntry entry)

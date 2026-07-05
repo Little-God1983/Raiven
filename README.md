@@ -153,8 +153,9 @@ whole chime -> toast -> click -> summary -> voice path on demand.
 | `SessionExpiryMinutes` | `240` | How long a finished session stays summarizable |
 | `SummaryBackend` | `cli` | `cli` uses your Claude subscription via the `claude` CLI (no per-token cost); `api` uses the Anthropic API directly (pay-per-token, needs `ANTHROPIC_API_KEY`) |
 | `CliModelAlias` | `haiku` | CLI model alias used for summaries when `SummaryBackend` is `cli` - one of `sonnet`, `opus`, `haiku`, `fable` |
-| `AutoPlaySummary` | `true` | When on, a finished-turn toast starts a countdown and auto-plays the summary after `AutoPlayDelaySeconds`; the toast carries **Play now** and **Abort** buttons. Set `false` for the old click-to-play behavior |
-| `AutoPlayDelaySeconds` | `5` | Seconds the auto-play countdown runs before speaking (clamped to a minimum of 1) |
+| `AutoPlaySummary` | `true` | When on, a finished-turn toast auto-plays the summary after `AutoPlayDelaySeconds`; with a non-zero delay the toast carries a countdown plus **Play now** and **Abort** buttons. Set `false` for the old click-to-play behavior |
+| `AutoPlayDelaySeconds` | `0` | Seconds the auto-play countdown runs before speaking (clamped to `0-60`). `0` (the default) plays immediately with no countdown or **Abort** window; set `1-60` for a reaction window. Also on the tray **Settings → Auto-play delay** submenu |
+| `HistorySize` | `10` | How many spoken summaries **Recent summaries** keeps (clamped to `1-50`). Also on the tray **Settings → Recent summaries kept** submenu; lowering it trims immediately |
 | `NotifyOnFinishedTurn` | `true` | Master on/off switch for finished-turn chime/toast/voice; also toggled by the tray **Settings** submenu |
 | `FinishedTurnVoice` | `summary` | `summary` asks Claude Haiku for a short spoken summary; `message` reads the last assistant message verbatim (no Claude call), capped by `FinishedTurnWordLimit`. Unknown values behave as `summary` |
 | `FinishedTurnWordLimit` | `0` | Spoken word cap for `FinishedTurnVoice: message` mode; `0` = unlimited. config.json-only - no tray control |
@@ -166,17 +167,18 @@ whole chime -> toast -> click -> summary -> voice path on demand.
 
 ### Auto-play, Play now/Abort, and Recent summaries
 
-By default (`AutoPlaySummary: true`) each finished-turn toast shows a countdown
-progress bar and speaks the summary automatically after `AutoPlayDelaySeconds`
-(default 5). While it counts down you can click **Play now** to speak it
-immediately or **Abort** to skip it; pausing notifications during a countdown
-also cancels the pending auto-play. Upgrading users get auto-play **on** by
-default - if you prefer the click-to-play toast, set `"AutoPlaySummary": false`
-in `config.json`.
+By default (`AutoPlaySummary: true`, `AutoPlayDelaySeconds: 0`) each finished-turn
+toast speaks the summary immediately - no countdown, no reaction window. Set
+`AutoPlayDelaySeconds` to `1-60` (config.json or the tray **Settings → Auto-play
+delay** submenu) to get a countdown progress bar first: while it counts down you
+can click **Play now** to speak it immediately or **Abort** to skip it, and
+pausing notifications during a countdown cancels the pending auto-play. If you
+prefer the click-to-play toast, set `"AutoPlaySummary": false` in `config.json`.
 
-The tray menu's **Recent summaries** submenu keeps the last 5 spoken summaries
-and replays any of them straight from cache - no new Claude call. This history
-is persisted to `%APPDATA%\Raiven\history.json`.
+The tray menu's **Recent summaries** submenu keeps the last `HistorySize`
+(default 10) spoken summaries and replays any of them straight from cache - no
+new Claude call. Change the count from the tray **Settings → Recent summaries
+kept** submenu. This history is persisted to `%APPDATA%\Raiven\history.json`.
 
 ### Playback status and the Stop/Hide buttons
 
@@ -228,8 +230,10 @@ replaying that same turn - via **Play now** on a lingering toast, or via
 **Recent summaries** - still speaks the original cached text. The new mode
 takes effect starting with that session's next finished turn.
 
-Logs: `%APPDATA%\Raiven\logs\raiven.log` - check here first whenever
-something doesn't work as expected.
+Logs: `%APPDATA%\Raiven\logs\raiven-log-YYYYMMDD.log` - a new file per day
+(e.g. `raiven-log-20260705.log`); RAIVEN keeps the newest 30 and deletes older
+ones on startup. Check today's file first whenever something doesn't work as
+expected.
 
 ## Troubleshooting
 

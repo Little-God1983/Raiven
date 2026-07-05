@@ -27,6 +27,20 @@ public class AutoPlayCountdownTests
     }
 
     [Fact]
+    public async Task Start_WithExplicitTotal_UsesItInsteadOfConstructorDefault()
+    {
+        // A long constructor default would blow past WaitLimit; the short explicit
+        // total is what must drive this run.
+        using var countdown = new AutoPlayCountdown(TimeSpan.FromSeconds(30), Tick);
+        var done = new TaskCompletionSource();
+        countdown.Expired += _ => done.TrySetResult();
+
+        countdown.Start("s1", Total);
+
+        await done.Task.WaitAsync(WaitLimit);
+    }
+
+    [Fact]
     public async Task Cancel_PreventsExpiry()
     {
         using var countdown = new AutoPlayCountdown(Total, Tick);

@@ -57,7 +57,27 @@ public class RaivenConfigTests
         var config = RaivenConfig.LoadOrCreate(TempConfigPath());
 
         Assert.True(config.AutoPlaySummary);
-        Assert.Equal(5, config.AutoPlayDelaySeconds);
+        Assert.Equal(0, config.AutoPlayDelaySeconds); // delay off by default
+    }
+
+    [Fact]
+    public void LoadOrCreate_MissingFile_HasHistorySizeDefault()
+    {
+        var config = RaivenConfig.LoadOrCreate(TempConfigPath());
+
+        Assert.Equal(10, config.HistorySize);
+    }
+
+    [Fact]
+    public void LoadOrCreate_ExistingFile_ReadsHistorySize()
+    {
+        var path = TempConfigPath();
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        File.WriteAllText(path, """{"HistorySize":20}""");
+
+        var config = RaivenConfig.LoadOrCreate(path);
+
+        Assert.Equal(20, config.HistorySize);
     }
 
     [Fact]

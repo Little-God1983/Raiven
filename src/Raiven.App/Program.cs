@@ -15,7 +15,8 @@ internal static class Program
     [STAThread]
     private static void Main(string[] args)
     {
-        FileLog.Configure(AppPaths.LogFile);
+        FileLog.Configure(AppPaths.LogDir);
+        FileLog.PruneOldLogs(keep: 30); // keep the newest 30 daily log files
         var config = RaivenConfig.LoadOrCreate(AppPaths.ConfigFile);
 
         try
@@ -26,7 +27,7 @@ internal static class Program
         {
             FileLog.Error("RAIVEN failed to start", ex);
             MessageBox.Show(
-                $"RAIVEN failed to start:\n\n{ex.Message}\n\nIf this mentions a COM or class-not-registered error, repair the Windows App Runtime:\nwinget install --id Microsoft.WindowsAppRuntime.2.2 --force\n\nDetails are in the log: {AppPaths.LogFile}",
+                $"RAIVEN failed to start:\n\n{ex.Message}\n\nIf this mentions a COM or class-not-registered error, repair the Windows App Runtime:\nwinget install --id Microsoft.WindowsAppRuntime.2.2 --force\n\nDetails are in the logs folder: {AppPaths.LogDir}",
                 "RAIVEN",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Error);
@@ -87,13 +88,16 @@ internal static class Program
         Raiven.Core.Summaries.IClaudeClient claude = config.SummaryBackend.Equals("api", StringComparison.OrdinalIgnoreCase)
             ? new Raiven.Core.Summaries.AnthropicClaudeClient(config.Model)
             : new Raiven.Core.Summaries.ClaudeCliClient(config.CliModelAlias);
-        var history = Raiven.Core.Summaries.SummaryHistory.Load(AppPaths.HistoryFile);
+        var history = Raiven.Core.Summaries.SummaryHistory.Load(
+            AppPaths.HistoryFile, Math.Clamp(config.HistorySize, 1, 50));
         var pipeline = new SummaryPipeline(registry, config, claude, notifier, voice, history);
         var questions = new QuestionPipeline(config, claude, voice);
 
-        var delaySeconds = Math.Max(1, config.AutoPlayDelaySeconds);
+        // The auto-play delay is read per finished turn (see BeginFinishedPlayback) so a
+        // tray change takes effect on the next turn; this default only backs Start() calls
+        // that pass no explicit total, which none currently do.
         using var countdown = new AutoPlayCountdown(
-            TimeSpan.FromSeconds(delaySeconds),
+            TimeSpan.FromSeconds(5),
             TimeSpan.FromMilliseconds(500));
 
         countdown.Progress += (id, fraction) => notifier.UpdateCountdownProgress(id, fraction);
@@ -137,6 +141,40 @@ internal static class Program
             FileLog.Info($"Status toast hidden for {id}");
         };
 
+        // Begin a finished-turn toast + playback for a session. Shared by real Stop events
+        // and the Test notification. Reads the delay from config each time so a tray change
+        // applies on the next turn: 0 = play immediately (no countdown/Abort window),
+        // 1-60 = countdown then auto-play, or (AutoPlaySummary off) a click-to-play toast.
+        void BeginFinishedPlayback(string sessionId, string folderName, string? headline)
+        {
+            pipeline.ObsoleteRun(sessionId);
+            if (!config.AutoPlaySummary)
+            {
+                notifier.ShowFinished(sessionId, folderName, headline);
+                return;
+            }
+
+            // Cancel any prior countdown first so a restarted session's stale timer can't
+            // tick/expire onto the fresh toast.
+            countdown.Cancel(sessionId);
+            var delay = Math.Clamp(config.AutoPlayDelaySeconds, 0, 60);
+            if (delay <= 0)
+            {
+                // Immediate: show a toast so the finished turn is visible (the pipeline
+                // reuses a live status toast for its stages), then play straight away.
+                if (config.ShowPlaybackStatus)
+                    notifier.ShowPlaybackStatus(sessionId, folderName, headline);
+                else
+                    notifier.ShowFinished(sessionId, folderName, headline);
+                _ = Task.Run(() => pipeline.PlaySummaryAsync(sessionId, userInitiated: false));
+            }
+            else
+            {
+                notifier.ShowFinishedCountdown(sessionId, folderName, headline, delay);
+                countdown.Start(sessionId, TimeSpan.FromSeconds(delay));
+            }
+        }
+
         // Chime + toast + immediate voice for a question (permission prompt, idle, or an
         // AskUserQuestion dialog). Shared by the Notification and AskUserQuestion branches.
         void AnnounceQuestion(ClaudeNotificationEvent q)
@@ -167,23 +205,11 @@ internal static class Program
                     try { headline = TranscriptReader.ReadFirstPrompt(stop.TranscriptPath); }
                     catch (Exception ex) { FileLog.Error("Could not read chat headline", ex); }
 
-                    // This turn's toast supersedes any in-flight run for the session:
-                    // the old run must not remove or scribble on the new toast, and its
-                    // not-yet-started speech is obsolete. Audible speech keeps playing
-                    // until the new turn's own playback preempts it.
-                    pipeline.ObsoleteRun(stop.SessionId);
-                    if (config.AutoPlaySummary)
-                    {
-                        // Cancel any prior countdown for this session first so a restarted
-                        // session's stale timer can't tick/expire onto the fresh toast.
-                        countdown.Cancel(stop.SessionId);
-                        notifier.ShowFinishedCountdown(stop.SessionId, folderName, headline, delaySeconds);
-                        countdown.Start(stop.SessionId);
-                    }
-                    else
-                    {
-                        notifier.ShowFinished(stop.SessionId, folderName, headline);
-                    }
+                    // This turn's toast supersedes any in-flight run for the session: the old
+                    // run must not remove or scribble on the new toast, and its not-yet-started
+                    // speech is obsolete (BeginFinishedPlayback calls ObsoleteRun). Audible
+                    // speech keeps playing until the new turn's own playback preempts it.
+                    BeginFinishedPlayback(stop.SessionId, folderName, headline);
                 }
             }
             else if (EventParser.TryParseClaudeNotification(evt, out var question))
@@ -227,7 +253,13 @@ internal static class Program
                 saveConfig: () => config.Save(AppPaths.ConfigFile),
                 history,
                 replaySummary: entry => Task.Run(() => pipeline.PlayCachedAsync(entry)),
-                testToast: () => { ChimePlayer.Play(config); notifier.ShowFinished("test-session-001", "RAIVEN", "This is a test notification"); },
+                testToast: () =>
+                {
+                    const string testId = "test-session-001";
+                    pipeline.RegisterCanned(testId, "RAIVEN", "Test notification", "This is a summary test by RAIVEN.");
+                    ChimePlayer.Play(config);
+                    BeginFinishedPlayback(testId, "RAIVEN", "Test notification");
+                },
                 testVoice: () => Task.Run(() => voice.SpeakAsync("RAIVEN online. All systems operational.")),
                 onPauseChanged: paused =>
                 {

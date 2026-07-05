@@ -3,12 +3,39 @@ namespace Raiven.Core.Logging;
 public static class FileLog
 {
     private static readonly Lock Sync = new();
-    private static string? _path;
+    private static string? _dir;
 
-    public static void Configure(string path)
+    /// <summary>Configure the directory that daily log files are written into.</summary>
+    public static void Configure(string directory)
     {
-        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        lock (Sync) { _path = path; }
+        Directory.CreateDirectory(directory);
+        lock (Sync) { _dir = directory; }
+    }
+
+    /// <summary>Keep the newest <paramref name="keep"/> daily log files, delete older ones.
+    /// Retention is by count (days RAIVEN actually ran), never by age.</summary>
+    public static void PruneOldLogs(int keep)
+    {
+        string? dir;
+        lock (Sync) { dir = _dir; }
+        if (dir is null) return;
+        try
+        {
+            // File names are raiven-log-YYYYMMDD.log, so name order is chronological.
+            var stale = Directory.GetFiles(dir, "raiven-log-*.log")
+                .OrderByDescending(Path.GetFileName, StringComparer.Ordinal)
+                .Skip(Math.Max(0, keep));
+            foreach (var file in stale)
+            {
+                try { File.Delete(file); }
+                catch (IOException) { /* best-effort */ }
+                catch (UnauthorizedAccessException) { /* best-effort */ }
+            }
+        }
+        catch (Exception)
+        {
+            // Pruning must never take the app down.
+        }
     }
 
     public static void Info(string message) => Write("INFO", message);
@@ -20,10 +47,13 @@ public static class FileLog
     {
         lock (Sync)
         {
-            if (_path is null) return;
+            if (_dir is null) return;
             try
             {
-                File.AppendAllText(_path, $"[{DateTimeOffset.Now:yyyy-MM-dd HH:mm:ss}] {level} {message}{Environment.NewLine}");
+                // Resolve the target file per write so a long-running instance rolls
+                // to a new file automatically at midnight.
+                var path = Path.Combine(_dir, $"raiven-log-{DateTimeOffset.Now:yyyyMMdd}.log");
+                File.AppendAllText(path, $"[{DateTimeOffset.Now:yyyy-MM-dd HH:mm:ss}] {level} {message}{Environment.NewLine}");
             }
             catch (IOException)
             {

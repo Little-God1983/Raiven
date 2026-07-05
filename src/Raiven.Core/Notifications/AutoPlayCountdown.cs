@@ -7,14 +7,18 @@ namespace Raiven.Core.Notifications;
 /// 0..1 fraction; Expired fires at most once per Start and never after a successful
 /// Cancel. Events run on thread-pool threads.
 /// </summary>
-public sealed class AutoPlayCountdown(TimeSpan total, TimeSpan tick) : IDisposable
+public sealed class AutoPlayCountdown(TimeSpan defaultTotal, TimeSpan tick) : IDisposable
 {
     private readonly ConcurrentDictionary<string, CancellationTokenSource> _running = new();
 
     public event Action<string, double>? Progress;
     public event Action<string>? Expired;
 
-    public void Start(string sessionId)
+    /// <summary>Start a countdown of the constructor's default duration.</summary>
+    public void Start(string sessionId) => Start(sessionId, defaultTotal);
+
+    /// <summary>Start a countdown of an explicit duration (e.g. the configured auto-play delay).</summary>
+    public void Start(string sessionId, TimeSpan total)
     {
         var cts = new CancellationTokenSource();
         _running.AddOrUpdate(sessionId, cts, (_, old) =>
@@ -23,7 +27,7 @@ public sealed class AutoPlayCountdown(TimeSpan total, TimeSpan tick) : IDisposab
             old.Dispose();
             return cts;
         });
-        _ = RunAsync(sessionId, cts);
+        _ = RunAsync(sessionId, cts, total);
     }
 
     public bool Cancel(string sessionId)
@@ -51,7 +55,7 @@ public sealed class AutoPlayCountdown(TimeSpan total, TimeSpan tick) : IDisposab
 
     public void Dispose() => CancelAll();
 
-    private async Task RunAsync(string sessionId, CancellationTokenSource cts)
+    private async Task RunAsync(string sessionId, CancellationTokenSource cts, TimeSpan total)
     {
         var steps = Math.Max(1, (int)Math.Round(total.TotalMilliseconds / tick.TotalMilliseconds));
         CancellationToken token;

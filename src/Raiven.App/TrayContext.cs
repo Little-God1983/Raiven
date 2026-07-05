@@ -44,7 +44,7 @@ public sealed class TrayContext : ApplicationContext
         menu.Opening += (_, _) => RebuildRecentSummaries(recentItem, history, replaySummary);
         RebuildRecentSummaries(recentItem, history, replaySummary);
 
-        var settingsItem = BuildSettingsMenu(config, saveConfig, onKeepAudioAliveChanged);
+        var settingsItem = BuildSettingsMenu(config, saveConfig, history, onKeepAudioAliveChanged);
 
         menu.Items.Add(pauseItem);
         menu.Items.Add(recentItem);
@@ -96,7 +96,7 @@ public sealed class TrayContext : ApplicationContext
     }
 
     private static ToolStripMenuItem BuildSettingsMenu(
-        RaivenConfig config, Action saveConfig, Action<bool>? onKeepAudioAliveChanged)
+        RaivenConfig config, Action saveConfig, SummaryHistory history, Action<bool>? onKeepAudioAliveChanged)
     {
         var settings = new ToolStripMenuItem("Settings");
 
@@ -126,11 +126,26 @@ public sealed class TrayContext : ApplicationContext
             config.QuestionVoice,
             value => { config.QuestionVoice = value; saveConfig(); });
 
+        var autoPlayDelay = new ToolStripMenuItem("Auto-play delay");
+        AddIntRadioGroup(autoPlayDelay,
+            [("Off (0s)", 0), ("1s", 1), ("3s", 3), ("5s", 5), ("10s", 10), ("30s", 30)],
+            config.AutoPlayDelaySeconds,
+            value => { config.AutoPlayDelaySeconds = value; saveConfig(); });
+
+        var historySize = new ToolStripMenuItem("Recent summaries kept");
+        AddIntRadioGroup(historySize,
+            [("5", 5), ("10", 10), ("20", 20)],
+            config.HistorySize,
+            value => { config.HistorySize = value; history.SetCapacity(value); saveConfig(); });
+
         settings.DropDownItems.Add(notifyTurns);
         settings.DropDownItems.Add(notifyQuestions);
         settings.DropDownItems.Add(new ToolStripSeparator());
         settings.DropDownItems.Add(turnVoice);
         settings.DropDownItems.Add(questionVoice);
+        settings.DropDownItems.Add(new ToolStripSeparator());
+        settings.DropDownItems.Add(autoPlayDelay);
+        settings.DropDownItems.Add(historySize);
 
         var keepAlive = new ToolStripMenuItem("Keep audio device awake")
         {
@@ -179,6 +194,26 @@ public sealed class TrayContext : ApplicationContext
         // Unknown config value: show the default (first) option as selected.
         if (!parent.DropDownItems.OfType<ToolStripMenuItem>().Any(i => i.Checked))
             ((ToolStripMenuItem)parent.DropDownItems[0]).Checked = true;
+    }
+
+    private static void AddIntRadioGroup(
+        ToolStripMenuItem parent, (string Label, int Value)[] options, int current, Action<int> apply)
+    {
+        foreach (var (label, value) in options)
+        {
+            var item = new ToolStripMenuItem(label) { Checked = current == value };
+            item.Click += (_, _) =>
+            {
+                foreach (var sibling in parent.DropDownItems.OfType<ToolStripMenuItem>())
+                    sibling.Checked = false;
+                item.Checked = true;
+                apply(value);
+            };
+            parent.DropDownItems.Add(item);
+        }
+
+        // A hand-edited value outside the presets shows no radio checked, matching the
+        // string radio group's behavior for unknown values.
     }
 
     private static ToolStripControlHost CreateHeaderItem(ContextMenuStrip owner)

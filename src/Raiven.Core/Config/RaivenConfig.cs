@@ -16,7 +16,8 @@ public sealed class RaivenConfig
     public string SummaryBackend { get; set; } = "cli"; // "cli" (Claude subscription via CLI) or "api" (pay-per-token Anthropic API)
     public string CliModelAlias { get; set; } = "haiku"; // CLI model alias: sonnet, opus, haiku, or fable
     public bool AutoPlaySummary { get; set; } = true;
-    public int AutoPlayDelaySeconds { get; set; } = 5;
+    public int AutoPlayDelaySeconds { get; set; } // 0 = play immediately (no countdown); clamped to 0-60 at use
+    public int HistorySize { get; set; } = 10; // Recent summaries kept; clamped to 1-50 at use
     public bool NotifyOnFinishedTurn { get; set; } = true;
     public string FinishedTurnVoice { get; set; } = "summary"; // "summary" (Claude Haiku) or "message" (read last assistant message verbatim)
     public int FinishedTurnWordLimit { get; set; } // spoken word cap for "message" mode; 0 = unlimited

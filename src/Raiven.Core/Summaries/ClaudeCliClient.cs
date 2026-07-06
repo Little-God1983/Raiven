@@ -32,12 +32,7 @@ public sealed class ClaudeCliClient(string modelAlias) : IClaudeClient
         foreach (var arg in BuildArguments(systemPrompt, modelAlias))
             psi.ArgumentList.Add(arg);
 
-        // Force subscription billing: if ANTHROPIC_API_KEY/ANTHROPIC_AUTH_TOKEN are set in
-        // RAIVEN's own environment, Claude Code prefers them over the /login subscription
-        // credential in non-interactive mode. Strip them so the CLI falls through to the
-        // subscription OAuth credential instead.
-        psi.Environment.Remove("ANTHROPIC_API_KEY");
-        psi.Environment.Remove("ANTHROPIC_AUTH_TOKEN");
+        ScrubChildEnvironment(psi.Environment);
 
         using var process = new Process { StartInfo = psi };
 
@@ -75,6 +70,23 @@ public sealed class ClaudeCliClient(string modelAlias) : IClaudeClient
         }
 
         return ExtractResultText(stdout);
+    }
+
+    // Strip environment variables that, when inherited from RAIVEN's own process,
+    // make the child `claude` CLI misbehave in non-interactive mode.
+    //   - ANTHROPIC_API_KEY / ANTHROPIC_AUTH_TOKEN: Claude Code prefers these over the
+    //     /login subscription credential, so strip them to force subscription billing.
+    //   - CLAUDECODE: set inside every Claude Code session. The CLI refuses to launch
+    //     ("Claude Code cannot be launched inside another Claude Code session") whenever
+    //     it sees this, so if RAIVEN itself is launched from within a Claude Code session
+    //     (a dev `dotnet run`, or install/testing from a Claude Code terminal) every
+    //     summary fails until it's cleared. The nesting guard keys on CLAUDECODE alone;
+    //     the other CLAUDE_CODE_* vars are tolerated, so leave them be.
+    internal static void ScrubChildEnvironment(IDictionary<string, string?> environment)
+    {
+        environment.Remove("ANTHROPIC_API_KEY");
+        environment.Remove("ANTHROPIC_AUTH_TOKEN");
+        environment.Remove("CLAUDECODE");
     }
 
     internal static IReadOnlyList<string> BuildArguments(string systemPrompt, string modelAlias) =>

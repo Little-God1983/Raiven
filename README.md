@@ -37,7 +37,7 @@ machine.
   default credential RAIVEN uses for summaries - no separate API key needed.
   (An `ANTHROPIC_API_KEY` works too as an opt-in alternative; see
   [Configuration](#configuration).)
-- The Windows App Runtime is required for notifications. Most current
+- The Windows App Runtime **2.2** is required for notifications. Most current
   Windows 11 installs already have it; if RAIVEN fails to start, see
   [Troubleshooting](#troubleshooting).
 - `git`, to clone the repo.
@@ -238,15 +238,17 @@ expected.
 ## Troubleshooting
 
 - **No toast/chime**: is RAIVEN running? Is the hook registered? Check the log.
-- **App fails to start with a "Windows App Runtime" error**: install the
-  Windows App Runtime -
+- **App fails to start with a COM / "class not registered" error
+  (0x80040154)**: the Windows App Runtime 2.2 is missing or not registered on
+  this machine. Download and run Microsoft's **standalone installer**
+  (`windowsappruntimeinstall-x64.exe`, latest 2.2.x release) from
   https://learn.microsoft.com/en-us/windows/apps/windows-app-sdk/downloads
-  If it's already installed and RAIVEN still fails at startup with a COM or
-  "class not registered" error, the install can be present but not correctly
-  registered - repair it with
-  `winget install --id Microsoft.WindowsAppRuntime.2.2 --force` (this exact
-  situation occurred during development). RAIVEN will show an error dialog
-  naming this fix if it hits this at startup, rather than failing silently.
+  and start RAIVEN again. Do **not** use winget for this: its catalog has no
+  `Microsoft.WindowsAppRuntime.2.2` package, and the 2.1 package it does have
+  installs only the Framework package - not the Main/Singleton packages that
+  register the notification COM classes - so it cannot fix this error.
+  RAIVEN shows an error dialog naming this fix if it hits this at startup,
+  rather than failing silently.
 - **"Access denied" starting the listener**: rare on Win10/11 loopback; run
   `netsh http add urlacl url=http://127.0.0.1:9876/ user=%USERNAME%` once as
   admin, or change `Port`.

@@ -27,7 +27,7 @@ internal static class Program
         {
             FileLog.Error("RAIVEN failed to start", ex);
             MessageBox.Show(
-                $"RAIVEN failed to start:\n\n{ex.Message}\n\nIf this mentions a COM or class-not-registered error, repair the Windows App Runtime:\nwinget install --id Microsoft.WindowsAppRuntime.2.2 --force\n\nDetails are in the logs folder: {AppPaths.LogDir}",
+                $"RAIVEN failed to start:\n\n{Raiven.Core.Diagnostics.StartupFailureMessage.Describe(ex)}\n\nDetails are in the logs folder: {AppPaths.LogDir}",
                 "RAIVEN",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Error);

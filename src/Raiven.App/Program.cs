@@ -249,6 +249,36 @@ internal static class Program
             return;
         }
 
+        // Reconstruct the complete history from the daily logs into one analyzable JSON file (#10).
+        void ExportHistory(bool full)
+        {
+            try
+            {
+                var scope = full
+                    ? Raiven.Core.Export.HistoryExporter.Scope.Full
+                    : Raiven.Core.Export.HistoryExporter.Scope.Signal;
+                var export = Raiven.Core.Export.HistoryExporter.ExportFromLogs(
+                    AppPaths.LogDir, AppVersion.Display, DateTimeOffset.Now, scope);
+                using var dialog = new SaveFileDialog
+                {
+                    Title = "Export RAIVEN history",
+                    Filter = "JSON file (*.json)|*.json",
+                    FileName = $"raiven-history-{DateTimeOffset.Now:yyyyMMdd-HHmmss}.json",
+                    InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
+                };
+                if (dialog.ShowDialog() != DialogResult.OK) return;
+                File.WriteAllText(dialog.FileName, Raiven.Core.Export.HistoryExporter.ToJson(export));
+                FileLog.Info($"Exported history ({scope}) to {dialog.FileName}: {export.Summaries.Count} summaries, " +
+                    $"{export.Errors.Count} errors, {export.Questions.Count} questions");
+                System.Diagnostics.Process.Start("explorer.exe", $"/select,\"{dialog.FileName}\"");
+            }
+            catch (Exception ex)
+            {
+                FileLog.Error("History export failed", ex);
+                notifier.ShowError("History export failed - check the RAIVEN log for details.");
+            }
+        }
+
         try
         {
             Application.Run(new TrayContext(
@@ -271,7 +301,8 @@ internal static class Program
                     foreach (var id in countdown.CancelAll())
                         notifier.RemoveNotification(id);
                 },
-                onKeepAudioAliveChanged: on => { if (on) keepAlive.Start(); else keepAlive.Stop(); }));
+                onKeepAudioAliveChanged: on => { if (on) keepAlive.Start(); else keepAlive.Stop(); },
+                exportHistory: ExportHistory));
         }
         finally
         {

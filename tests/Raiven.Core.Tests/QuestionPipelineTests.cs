@@ -11,7 +11,7 @@ public class QuestionPipelineTests
     private sealed class FakeVoice : IVoice
     {
         public List<string> Spoken { get; } = [];
-        public Task SpeakAsync(string text, Action<VoicePhase>? onPhase = null)
+        public Task SpeakAsync(string text, Action<VoicePhase>? onPhase = null, SpeechPriority priority = SpeechPriority.Normal)
         {
             Spoken.Add(text);
             return Task.CompletedTask;

@@ -150,6 +150,7 @@ whole chime -> toast -> click -> summary -> voice path on demand.
 | `ChimeWavPath` | `null` | Custom chime WAV; default is the system Asterisk sound |
 | `Model` | `claude-haiku-4-5` | Model used for summaries (when `SummaryBackend` is `api`) |
 | `MaxTranscriptChars` | `30000` | Max transcript characters sent for summarizing |
+| `SummaryTimeoutSeconds` | `120` | Max seconds to wait for the summary Claude call before giving up (clamped `1-600`). Raise it on slower machines or very long sessions; config.json-only |
 | `SessionExpiryMinutes` | `240` | How long a finished session stays summarizable |
 | `SummaryBackend` | `cli` | `cli` uses your Claude subscription via the `claude` CLI (no per-token cost); `api` uses the Anthropic API directly (pay-per-token, needs `ANTHROPIC_API_KEY`) |
 | `CliModelAlias` | `haiku` | CLI model alias used for summaries when `SummaryBackend` is `cli` - one of `sonnet`, `opus`, `haiku`, `fable` |

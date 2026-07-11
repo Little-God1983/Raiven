@@ -15,7 +15,7 @@ public static class TranscriptReader
         // (index, isPrompt, promptText) for user lines; (texts, tools) for assistant lines.
         var entries = new List<(bool IsPrompt, string? Prompt, List<string> Texts, List<string> Tools)>();
 
-        foreach (var line in File.ReadLines(transcriptPath))
+        foreach (var line in ReadLinesShared(transcriptPath))
         {
             if (string.IsNullOrWhiteSpace(line)) continue;
             JsonDocument doc;
@@ -121,7 +121,7 @@ public static class TranscriptReader
         if (!File.Exists(transcriptPath))
             return null;
 
-        foreach (var line in File.ReadLines(transcriptPath))
+        foreach (var line in ReadLinesShared(transcriptPath))
         {
             if (string.IsNullOrWhiteSpace(line)) continue;
             JsonDocument doc;
@@ -173,5 +173,22 @@ public static class TranscriptReader
             }
         }
         return (texts, tools);
+    }
+
+    /// <summary>
+    /// Reads a file line by line while another process (Claude Code) still has it open
+    /// for appending. Plain <see cref="File.ReadLines(string)"/> opens with
+    /// <see cref="FileShare.Read"/>, which conflicts with the writer's open handle and
+    /// throws a sharing violation - the "Raiven stuck at working" bug. Sharing write and
+    /// delete makes RAIVEN's read handle compatible with the live writer.
+    /// </summary>
+    private static IEnumerable<string> ReadLinesShared(string path)
+    {
+        using var stream = new FileStream(
+            path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+        using var reader = new StreamReader(stream);
+        string? line;
+        while ((line = reader.ReadLine()) is not null)
+            yield return line;
     }
 }

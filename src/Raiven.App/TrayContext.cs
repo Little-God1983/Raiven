@@ -19,7 +19,8 @@ public sealed class TrayContext : ApplicationContext
         Action testToast,
         Action testVoice,
         Action<bool>? onPauseChanged = null,
-        Action<bool>? onKeepAudioAliveChanged = null)
+        Action<bool>? onKeepAudioAliveChanged = null,
+        Action<bool>? exportHistory = null)
     {
         var menu = new ContextMenuStrip();
 
@@ -54,6 +55,13 @@ public sealed class TrayContext : ApplicationContext
         menu.Items.Add("Test voice", null, (_, _) => testVoice());
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add(startupItem);
+        if (exportHistory is not null)
+        {
+            var exportItem = new ToolStripMenuItem("Export history");
+            exportItem.DropDownItems.Add("For analysis (summaries, errors, questions)", null, (_, _) => exportHistory(false));
+            exportItem.DropDownItems.Add("Everything (full log)", null, (_, _) => exportHistory(true));
+            menu.Items.Add(exportItem);
+        }
         menu.Items.Add("Open data folder", null, (_, _) =>
             System.Diagnostics.Process.Start("explorer.exe", AppPaths.DataDir));
         menu.Items.Add(new ToolStripSeparator());

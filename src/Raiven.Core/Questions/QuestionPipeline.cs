@@ -17,7 +17,7 @@ public sealed class QuestionPipeline(RaivenConfig config, IClaudeClient claude, 
     public const string SystemPrompt =
         "You are RAIVEN, a voice assistant. Claude Code is waiting for the user's attention. " +
         "Reply with ONE short spoken-style sentence telling the user what Claude Code is asking or " +
-        "waiting for, in plain conversational language. No markdown, no preamble.";
+        "waiting for, in plain conversational language. No markdown, no emojis or special symbols, no preamble.";
 
     private static readonly HashSet<string> IgnoredTypes = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -39,16 +39,16 @@ public sealed class QuestionPipeline(RaivenConfig config, IClaudeClient claude, 
             switch (config.QuestionVoice.ToLowerInvariant())
             {
                 case "message" when !string.IsNullOrWhiteSpace(evt.Message):
-                    await voice.SpeakAsync(SpeechText.LimitWords(evt.Message, config.QuestionWordLimit));
+                    await voice.SpeakAsync(SpeechText.LimitWords(evt.Message, config.QuestionWordLimit), priority: SpeechPriority.Urgent);
                     return;
                 case "summary":
-                    await voice.SpeakAsync(await SummarizeQuestionAsync(evt));
+                    await voice.SpeakAsync(await SummarizeQuestionAsync(evt), priority: SpeechPriority.Urgent);
                     return;
                 default: // "announce", "message" with empty message, and unknown values
                     if (!config.QuestionVoice.Equals("announce", StringComparison.OrdinalIgnoreCase) &&
                         !config.QuestionVoice.Equals("message", StringComparison.OrdinalIgnoreCase))
                         FileLog.Info($"Unknown QuestionVoice '{config.QuestionVoice}'; using announce");
-                    await voice.SpeakAsync(announceLine);
+                    await voice.SpeakAsync(announceLine, priority: SpeechPriority.Urgent);
                     return;
             }
         }

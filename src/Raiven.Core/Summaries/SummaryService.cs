@@ -9,7 +9,8 @@ public sealed class SummaryService(IClaudeClient client)
         "You are RAIVEN, a voice assistant that reports what the coding agent Claude Code just finished doing. " +
         "Reply with a 1-3 sentence spoken-style summary of what was accomplished and the outcome, in plain " +
         "conversational language, speaking in first person as the agent (for example: 'I fixed the login bug " +
-        "and all tests are passing now.'). No markdown, no code, no file paths unless essential, no preamble.";
+        "and all tests are passing now.'). No markdown, no code, no emojis or special symbols, no file paths " +
+        "unless essential, no preamble.";
 
     public static string BuildUserContent(TurnSlice slice)
     {

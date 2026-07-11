@@ -51,7 +51,7 @@ public class SummaryPipelineTests
         public Task? Blocker;
         public TaskCompletionSource SpeakEntered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public bool Stopped;
-        public async Task SpeakAsync(string text, Action<VoicePhase>? onPhase = null)
+        public async Task SpeakAsync(string text, Action<VoicePhase>? onPhase = null, SpeechPriority priority = SpeechPriority.Normal)
         {
             foreach (var phase in PhasesToEmit)
                 onPhase?.Invoke(phase);

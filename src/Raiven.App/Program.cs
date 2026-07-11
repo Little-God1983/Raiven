@@ -81,7 +81,11 @@ internal static class Program
         var state = new AppState();
         var registry = new SessionRegistry(TimeSpan.FromMinutes(config.SessionExpiryMinutes));
         var notifier = new AppSdkNotifier(config);
-        var voice = new VoiceService(config);
+        // All speech funnels through the coordinator so overlapping notifications queue instead
+        // of cutting each other off (#13); it drives the raw VoiceService one utterance at a time.
+        var rawVoice = new VoiceService(config);
+        using var voice = new Raiven.Core.Voice.SpeechCoordinator(
+            rawVoice, new Raiven.Core.Voice.RandomTransitionNarrator());
         using var keepAlive = new AudioKeepAlive();
         if (config.KeepAudioAlive) keepAlive.Start();
 

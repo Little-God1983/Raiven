@@ -12,8 +12,9 @@ public sealed class VoiceService(RaivenConfig config) : IVoice
     private KokoroTTS? _tts;
     private KokoroVoice? _voice;
 
-    // KokoroSharp stops any in-flight playback before speaking - see IVoice.SpeakAsync.
-    public async Task SpeakAsync(string text, Action<VoicePhase>? onPhase = null)
+    // Raw backend: KokoroSharp stops any in-flight playback before speaking. The SpeechCoordinator
+    // wraps this and only ever calls it one utterance at a time, so priority is not used here.
+    public async Task SpeakAsync(string text, Action<VoicePhase>? onPhase = null, SpeechPriority priority = SpeechPriority.Normal)
     {
         var tcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         SynthesisHandle handle;

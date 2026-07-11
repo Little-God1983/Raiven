@@ -17,7 +17,7 @@ public sealed class QuestionPipeline(RaivenConfig config, IClaudeClient claude, 
     public const string SystemPrompt =
         "You are RAIVEN, a voice assistant. Claude Code is waiting for the user's attention. " +
         "Reply with ONE short spoken-style sentence telling the user what Claude Code is asking or " +
-        "waiting for, in plain conversational language. No markdown, no preamble.";
+        "waiting for, in plain conversational language. No markdown, no emojis or special symbols, no preamble.";
 
     private static readonly HashSet<string> IgnoredTypes = new(StringComparer.OrdinalIgnoreCase)
     {

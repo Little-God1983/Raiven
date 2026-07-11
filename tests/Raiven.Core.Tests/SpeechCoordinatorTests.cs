@@ -141,6 +141,20 @@ public class SpeechCoordinatorTests
     }
 
     [Fact]
+    public async Task SpeakAsync_CleansTextBeforePlaying()
+    {
+        var inner = new GatedVoice();
+        using var coord = new SpeechCoordinator(inner, new FixedNarrator("IN", "OUT"));
+
+        var t = coord.SpeakAsync("Done **fixing** the bug ✅");
+        await inner.WaitStarted(0);
+        inner.Finish(0);
+        await t;
+
+        Assert.Equal(["Done fixing the bug"], inner.StartedSnapshot()); // emoji + markdown removed on the way to Kokoro
+    }
+
+    [Fact]
     public async Task Stop_DuringSummary_EndsItWithoutResumeOrNarration()
     {
         var inner = new GatedVoice();

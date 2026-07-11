@@ -139,7 +139,8 @@ public sealed class SpeechCoordinator : IVoice, IDisposable
 
     private async Task SpeakRawAsync(string text, Action<VoicePhase>? onPhase)
     {
-        try { await _inner.SpeakAsync(text, onPhase).ConfigureAwait(false); }
+        // Single choke point for all speech: strip emojis/markdown/symbols Kokoro mispronounces (#12).
+        try { await _inner.SpeakAsync(SpeechText.CleanForSpeech(text), onPhase).ConfigureAwait(false); }
         catch (Exception ex) { FileLog.Error("Voice playback failed", ex); }
     }
 

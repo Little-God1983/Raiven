@@ -69,12 +69,14 @@ public class SummaryPipelineTests
         public Exception? Throws;
         public int Calls;
         public Task? Blocker;
+        public bool HangUntilCancelled;
         public TaskCompletionSource Entered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public async Task<string> CompleteAsync(string systemPrompt, string userContent, CancellationToken ct = default)
         {
             Interlocked.Increment(ref Calls);
             Entered.TrySetResult();
             if (Blocker is not null) await Blocker;
+            if (HangUntilCancelled) await Task.Delay(Timeout.Infinite, ct);
             if (Throws is not null) throw Throws;
             return Response;
         }
@@ -407,6 +409,24 @@ public class SummaryPipelineTests
         await pipeline.PlaySummaryAsync("nope", userInitiated: false);
 
         Assert.Contains("nope", notifier.Removed);
+    }
+
+    [Fact]
+    public async Task PlaySummaryAsync_SummaryCall_TimesOutByConfiguredSeconds()
+    {
+        var registry = new SessionRegistry(TimeSpan.FromHours(4));
+        registry.Upsert("s1", WriteTranscript(), @"E:\Repos\RAIVEN", DateTimeOffset.Now);
+        var notifier = new FakeNotifier();
+        var voice = new FakeVoice();
+        var claude = new FakeClaudeClient { HangUntilCancelled = true }; // only cancellation ends the call
+        var config = new RaivenConfig { SummaryTimeoutSeconds = 1 };
+        var pipeline = new SummaryPipeline(registry, config, claude, notifier, voice, NewHistory());
+
+        // With the configured 1s timeout this finishes fast; the old hardcoded 30s would hang past the guard.
+        await pipeline.PlaySummaryAsync("s1").WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.Contains(notifier.Errors, e => e.Contains("Couldn't get the summary"));
+        Assert.Empty(voice.Spoken);
     }
 
     [Fact]

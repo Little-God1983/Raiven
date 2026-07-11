@@ -12,6 +12,7 @@ public sealed class RaivenConfig
     public string? ChimeWavPath { get; set; }
     public string Model { get; set; } = "claude-haiku-4-5";
     public int MaxTranscriptChars { get; set; } = 30000;
+    public int SummaryTimeoutSeconds { get; set; } = 120; // max seconds for the summary Claude call; clamped to 1-600 at use
     public int SessionExpiryMinutes { get; set; } = 240;
     public string SummaryBackend { get; set; } = "cli"; // "cli" (Claude subscription via CLI) or "api" (pay-per-token Anthropic API)
     public string CliModelAlias { get; set; } = "haiku"; // CLI model alias: sonnet, opus, haiku, or fable

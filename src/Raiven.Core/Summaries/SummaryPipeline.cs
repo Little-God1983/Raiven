@@ -124,7 +124,8 @@ public sealed class SummaryPipeline(
                     if (!config.FinishedTurnVoice.Equals("summary", StringComparison.OrdinalIgnoreCase))
                         FileLog.Info($"Unknown FinishedTurnVoice '{config.FinishedTurnVoice}'; using summary");
                     UpdateStatus(sessionId, runToken, "Summarizing with Haiku…", 0.25);
-                    using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+                    using var cts = new CancellationTokenSource(
+                        TimeSpan.FromSeconds(Math.Clamp(config.SummaryTimeoutSeconds, 1, 600)));
                     spokenText = await _summaries.SummarizeAsync(slice, cts.Token);
                     FileLog.Info($"Summary for {sessionId}: {spokenText}");
                 }

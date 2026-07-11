@@ -394,6 +394,22 @@ public class SummaryPipelineTests
     }
 
     [Fact]
+    public async Task PlaySummaryAsync_UnknownSessionWithLiveToast_RemovesStatusToast()
+    {
+        // Regression for #11 "stuck at working": in immediate mode BeginFinishedPlayback
+        // shows the "Working…" status toast before the pipeline runs. If the run exits
+        // early (here: the session's details are gone), that toast must still be removed
+        // instead of hanging on "Working…" forever.
+        var notifier = new FakeNotifier { ToastLive = true };
+        var pipeline = new SummaryPipeline(
+            new SessionRegistry(TimeSpan.FromHours(4)), new RaivenConfig(), new FakeClaudeClient(), notifier, new FakeVoice(), NewHistory());
+
+        await pipeline.PlaySummaryAsync("nope", userInitiated: false);
+
+        Assert.Contains("nope", notifier.Removed);
+    }
+
+    [Fact]
     public async Task PlaySummaryAsync_ClaudeFails_StillRemovesToast()
     {
         var registry = new SessionRegistry(TimeSpan.FromHours(4));

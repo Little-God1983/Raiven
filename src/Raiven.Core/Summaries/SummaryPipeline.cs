@@ -150,6 +150,14 @@ public sealed class SummaryPipeline(
         }
         finally
         {
+            // Backstop so the "Working…" status toast can never get stuck (#11): the inner
+            // paths remove it after speech, but an early return or an exception before them
+            // (e.g. the transcript read throwing while Claude Code holds the file) would
+            // otherwise orphan a toast already on screen. Guarded by IsToastLive so a normal
+            // run doesn't remove twice; an obsolete run (IsCurrentRun false) leaves its toast
+            // to the successor.
+            if (config.ShowPlaybackStatus && IsCurrentRun(sessionId, runToken) && notifier.IsToastLive(sessionId))
+                notifier.RemoveNotification(sessionId);
             if (!generatingReleased) _generating.TryRemove(sessionId, out _);
             _currentRun.TryRemove(new KeyValuePair<string, Guid>(sessionId, runToken));
         }

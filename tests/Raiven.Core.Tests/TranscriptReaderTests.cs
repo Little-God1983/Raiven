@@ -163,4 +163,31 @@ public class TranscriptReaderTests
 
         Assert.Equal("Fix the login bug", TranscriptReader.ReadFirstPrompt(path));
     }
+
+    // Regression for the "Raiven stuck at working" bug (#11): Claude Code holds the
+    // transcript open for appending (more so with multiple agents), and RAIVEN must
+    // still be able to read it instead of failing with a sharing violation.
+    [Fact]
+    public void ReadLastTurn_TranscriptHeldOpenForAppending_StillReads()
+    {
+        var path = WriteTranscript(UserStringLine, AssistantTextLine);
+        // Mimic Claude Code's own append handle (FILE_SHARE_READ|WRITE|DELETE).
+        using var writerHandle = new FileStream(
+            path, FileMode.Open, FileAccess.Write, FileShare.ReadWrite | FileShare.Delete);
+
+        var slice = TranscriptReader.ReadLastTurn(path);
+
+        Assert.Equal("Fix the login bug", slice.UserPrompt);
+        Assert.Equal("Fixed the null check. All tests pass.", slice.AssistantText);
+    }
+
+    [Fact]
+    public void ReadFirstPrompt_TranscriptHeldOpenForAppending_StillReads()
+    {
+        var path = WriteTranscript(UserStringLine, AssistantTextLine);
+        using var writerHandle = new FileStream(
+            path, FileMode.Open, FileAccess.Write, FileShare.ReadWrite | FileShare.Delete);
+
+        Assert.Equal("Fix the login bug", TranscriptReader.ReadFirstPrompt(path));
+    }
 }

@@ -164,6 +164,75 @@ public class TranscriptReaderTests
         Assert.Equal("Fix the login bug", TranscriptReader.ReadFirstPrompt(path));
     }
 
+    // Regression for #15: the user queues the next message while Claude works, so by the
+    // time RAIVEN reads the transcript (auto-play countdown later), the queued prompt is
+    // already the last user line. The finished turn must still be what gets summarized.
+    [Fact]
+    public void ReadLastTurn_QueuedNextPrompt_ReturnsFinishedTurn()
+    {
+        var queuedPrompt = """{"type":"user","message":{"role":"user","content":"what tech stack is this?"},"sessionId":"s1"}""";
+        var path = WriteTranscript(UserStringLine, AssistantToolLine, ToolResultLine, AssistantTextLine, queuedPrompt);
+
+        var slice = TranscriptReader.ReadLastTurn(path);
+
+        Assert.Equal("Fix the login bug", slice.UserPrompt);
+        Assert.Equal("Fixed the null check. All tests pass.", slice.AssistantText);
+        Assert.Equal(["Edit"], slice.ToolsUsed);
+    }
+
+    [Fact]
+    public void ReadLastTurn_MultipleTurns_PicksLastAnsweredTurn()
+    {
+        var earlierAnswer = """{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"An earlier answer."}]},"sessionId":"s1"}""";
+        var queuedPrompt = """{"type":"user","message":{"role":"user","content":"a queued follow-up"},"sessionId":"s1"}""";
+        var path = WriteTranscript(OldUserLine, earlierAnswer, UserStringLine, AssistantTextLine, queuedPrompt);
+
+        var slice = TranscriptReader.ReadLastTurn(path);
+
+        Assert.Equal("Fix the login bug", slice.UserPrompt);
+        Assert.Equal("Fixed the null check. All tests pass.", slice.AssistantText);
+    }
+
+    [Fact]
+    public void ReadLastTurn_SlashCommandAfterAnswer_IsNotAPrompt()
+    {
+        var commandLine = """{"type":"user","message":{"role":"user","content":"<command-name>/export</command-name>\n<command-message>export</command-message>"},"sessionId":"s1"}""";
+        var stdoutLine = """{"type":"user","message":{"role":"user","content":"<local-command-stdout>Exported.</local-command-stdout>"},"sessionId":"s1"}""";
+        var path = WriteTranscript(UserStringLine, AssistantTextLine, commandLine, stdoutLine);
+
+        var slice = TranscriptReader.ReadLastTurn(path);
+
+        Assert.Equal("Fix the login bug", slice.UserPrompt);
+        Assert.Equal("Fixed the null check. All tests pass.", slice.AssistantText);
+    }
+
+    [Fact]
+    public void ReadLastTurn_BashModeAfterAnswer_IsNotAPrompt()
+    {
+        var bashIn = """{"type":"user","message":{"role":"user","content":"<bash-input>git status</bash-input>"},"sessionId":"s1"}""";
+        var bashOut = """{"type":"user","message":{"role":"user","content":"<bash-stdout>clean</bash-stdout>"},"sessionId":"s1"}""";
+        var path = WriteTranscript(UserStringLine, AssistantTextLine, bashIn, bashOut);
+
+        var slice = TranscriptReader.ReadLastTurn(path);
+
+        Assert.Equal("Fix the login bug", slice.UserPrompt);
+        Assert.Equal("Fixed the null check. All tests pass.", slice.AssistantText);
+    }
+
+    // Guards the fallback the fix must preserve: a prompt with no assistant reply yet
+    // still yields that prompt with empty text (the "no message to read" path).
+    [Fact]
+    public void ReadLastTurn_PromptWithoutAnyAssistantReply_ReturnsEmptyText()
+    {
+        var path = WriteTranscript(UserStringLine);
+
+        var slice = TranscriptReader.ReadLastTurn(path);
+
+        Assert.Equal("Fix the login bug", slice.UserPrompt);
+        Assert.Equal("", slice.AssistantText);
+        Assert.Empty(slice.ToolsUsed);
+    }
+
     // Regression for the "Raiven stuck at working" bug (#11): Claude Code holds the
     // transcript open for appending (more so with multiple agents), and RAIVEN must
     // still be able to read it instead of failing with a sharing violation.

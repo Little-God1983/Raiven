@@ -110,6 +110,7 @@ public sealed class SummaryPipeline(
                 }
 
                 var slice = TranscriptReader.ReadLastTurn(info.TranscriptPath, config.MaxTranscriptChars);
+                FileLog.Info($"Turn slice for {sessionId}: {slice.Describe()}");
 
                 string spokenText;
                 if (config.FinishedTurnVoice.Equals("message", StringComparison.OrdinalIgnoreCase))

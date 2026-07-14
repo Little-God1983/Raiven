@@ -43,7 +43,15 @@ public static class TranscriptReader
             }
         }
 
-        var lastPrompt = entries.FindLastIndex(e => e.IsPrompt);
+        // Anchor on the last assistant entry, not the last prompt: the user may already
+        // have queued the next message by the time we read the transcript (#15), and a
+        // prompt with no reply after it would otherwise erase the turn that just finished.
+        var lastAssistant = entries.FindLastIndex(e => !e.IsPrompt);
+        var lastPrompt = lastAssistant >= 0
+            ? entries.FindLastIndex(lastAssistant, e => e.IsPrompt)
+            : entries.FindLastIndex(e => e.IsPrompt);
+        if (lastPrompt < 0)
+            lastPrompt = entries.FindLastIndex(e => e.IsPrompt);
         if (lastPrompt < 0)
             throw new InvalidDataException("No user prompt found in transcript.");
 
@@ -53,7 +61,7 @@ public static class TranscriptReader
 
         var textBuilder = new StringBuilder();
         var tools = new List<string>();
-        foreach (var entry in entries.Skip(lastPrompt + 1).Where(e => !e.IsPrompt))
+        foreach (var entry in entries.Skip(lastPrompt + 1).TakeWhile(e => !e.IsPrompt))
         {
             foreach (var t in entry.Texts)
             {
@@ -87,6 +95,7 @@ public static class TranscriptReader
         {
             var text = content.GetString()!;
             if (string.IsNullOrWhiteSpace(text)) return false;
+            if (IsSyntheticRecord(text)) return false;
             prompt = text;
             return true;
         }
@@ -104,12 +113,18 @@ public static class TranscriptReader
                     sb.Append(t.GetString());
             }
             if (sb.Length == 0) return false;
+            if (IsSyntheticRecord(sb.ToString())) return false;
             prompt = sb.ToString();
             return true;
         }
 
         return false;
     }
+
+    /// <summary>Synthetic records (slash commands, bash mode, hook output) are stored as
+    /// user lines of metadata XML; they are not prompts the user actually typed.</summary>
+    private static bool IsSyntheticRecord(string text) =>
+        System.Text.RegularExpressions.Regex.IsMatch(text.TrimStart(), "^<[a-z][a-z0-9-]*>");
 
     /// <summary>
     /// Returns the chat's first user prompt as a single-line headline, truncated to
@@ -138,10 +153,6 @@ public static class TranscriptReader
 
                 var headline = prompt.ReplaceLineEndings(" ").Trim();
                 if (headline.Length == 0) continue;
-                // Synthetic records (slash commands, bash mode, hook output) are stored
-                // as user lines of metadata XML; they are not the chat's real opening prompt.
-                if (System.Text.RegularExpressions.Regex.IsMatch(headline, "^<[a-z][a-z0-9-]*>"))
-                    continue;
                 return headline.Length <= maxChars ? headline : headline[..maxChars].TrimEnd() + "…";
             }
         }

@@ -163,6 +163,7 @@ whole chime -> toast -> click -> summary -> voice path on demand.
 | `NotifyOnQuestion` | `true` | Master on/off switch for question notifications (Claude Code waiting on a permission prompt or input); also toggled by the tray **Settings** submenu |
 | `QuestionVoice` | `announce` | `announce` speaks a fixed "Claude Code has a question in {folder}." line; `message` reads the hook's message text verbatim, capped by `QuestionWordLimit`; `summary` asks Claude Haiku to phrase what's being asked. Unknown values (and `message` with an empty message) behave as `announce` |
 | `QuestionWordLimit` | `0` | Spoken word cap for `QuestionVoice: message` mode; `0` = unlimited. config.json-only - no tray control |
+| `SuppressDuplicateQuestionPrompts` | `true` | Drops Claude Code's generic "Claude needs your permission to use AskUserQuestion" notification, which newer builds fire a few seconds after the `PreToolUse` hook already announced the same dialog with its real question text. Toggled by tray **Settings -> Skip duplicate permission prompts**. Turn it off only if you have not registered the `PreToolUse` hook - permission prompts for every other tool are unaffected either way |
 | `KeepAudioAlive` | `false` | Plays a continuous silent stream so the audio device - and a Bluetooth link - never sleeps, preventing the first ~second of speech being swallowed. Toggled by tray **Settings -> Keep audio device awake**. Costs Bluetooth-headphone battery while on |
 | `ShowPlaybackStatus` | `true` | Finished-turn and replay toasts stay on screen through the whole pipeline and show what RAIVEN is doing (Summarizing with Haiku / Generating voice / Speaking), then dismiss when speech ends; also toggled by the tray **Settings** submenu. `false` restores the old disappear-at-play behavior |
 
@@ -239,6 +240,7 @@ expected.
 ## Troubleshooting
 
 - **No toast/chime**: is RAIVEN running? Is the hook registered? Check the log.
+- **A question is announced twice** (the real question, then "Claude needs your permission to use AskUserQuestion"): you are running with `SuppressDuplicateQuestionPrompts: false`. Re-enable it in tray **Settings -> Skip duplicate permission prompts**.
 - **App fails to start with a COM / "class not registered" error
   (0x80040154)**: the Windows App Runtime 2.2 is missing or not registered on
   this machine. Download and run Microsoft's **standalone installer**

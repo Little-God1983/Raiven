@@ -219,13 +219,23 @@ internal static class Program
             else if (EventParser.TryParseClaudeNotification(evt, out var question))
             {
                 FileLog.Info($"Notification event for session {question.SessionId}: [{question.NotificationType ?? "unknown"}] {question.Message}");
-                if (QuestionPipeline.IsQuestion(question.NotificationType))
+                if (config.SuppressDuplicateQuestionPrompts &&
+                    QuestionPipeline.IsDuplicateAskUserQuestionPrompt(question.NotificationType, question.Message))
+                {
+                    // The PreToolUse branch below already announced this dialog with the real question
+                    // text; this permission copy would only talk over it and bury its toast.
+                    FileLog.Info($"Skipping duplicate AskUserQuestion permission prompt for {question.SessionId}");
+                }
+                else if (QuestionPipeline.IsQuestion(question.NotificationType))
+                {
                     AnnounceQuestion(question);
+                }
             }
             else if (EventParser.TryParseClaudeAskUserQuestion(evt, out var askQuestion))
             {
-                // AskUserQuestion dialogs fire no Notification/Stop hook, so without this
-                // branch RAIVEN stays silent on them. Always a question - no ignore-list filter.
+                // Only this hook carries the question text (the Notification copy is generic and
+                // gets dropped above), so without this branch RAIVEN never reads the actual
+                // question. Always a question - no ignore-list filter.
                 FileLog.Info($"AskUserQuestion event for session {askQuestion.SessionId}: {askQuestion.Message}");
                 AnnounceQuestion(askQuestion);
             }

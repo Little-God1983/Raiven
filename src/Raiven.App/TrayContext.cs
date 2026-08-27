@@ -122,6 +122,17 @@ public sealed class TrayContext : ApplicationContext
         };
         notifyQuestions.CheckedChanged += (_, _) => { config.NotifyOnQuestion = notifyQuestions.Checked; saveConfig(); };
 
+        var skipDuplicates = new ToolStripMenuItem("Skip duplicate permission prompts")
+        {
+            CheckOnClick = true,
+            Checked = config.SuppressDuplicateQuestionPrompts,
+            ToolTipText = "Claude Code announces an AskUserQuestion dialog twice: once with the real "
+                        + "question, then again as \"needs your permission to use AskUserQuestion\". "
+                        + "Uncheck only if the PreToolUse hook is not registered.",
+        };
+        skipDuplicates.CheckedChanged += (_, _) =>
+            { config.SuppressDuplicateQuestionPrompts = skipDuplicates.Checked; saveConfig(); };
+
         var turnVoice = new ToolStripMenuItem("Finished turn voice");
         AddRadioGroup(turnVoice,
             [("Haiku summary", "summary"), ("Read last message", "message")],
@@ -148,6 +159,7 @@ public sealed class TrayContext : ApplicationContext
 
         settings.DropDownItems.Add(notifyTurns);
         settings.DropDownItems.Add(notifyQuestions);
+        settings.DropDownItems.Add(skipDuplicates);
         settings.DropDownItems.Add(new ToolStripSeparator());
         settings.DropDownItems.Add(turnVoice);
         settings.DropDownItems.Add(questionVoice);

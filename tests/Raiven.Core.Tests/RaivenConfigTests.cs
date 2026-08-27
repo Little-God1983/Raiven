@@ -17,6 +17,7 @@ public class RaivenConfigTests
         Assert.True(File.Exists(path));
         Assert.Equal(9876, config.Port);
         Assert.Equal("af_heart", config.Voice);
+        Assert.True(config.SuppressDuplicateQuestionPrompts);
         Assert.Equal("claude-haiku-4-5", config.Model);
         Assert.Equal(30000, config.MaxTranscriptChars);
         Assert.Equal(240, config.SessionExpiryMinutes);

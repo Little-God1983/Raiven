@@ -66,10 +66,12 @@ public static class EventParser
     }
 
     /// <summary>
-    /// The interactive AskUserQuestion dialog fires no Notification hook (and no Stop -
-    /// the turn continues once answered), only a PreToolUse hook with
-    /// tool_name "AskUserQuestion". We surface it from that hook as a question so RAIVEN
-    /// still chimes/announces. The question text is pulled from tool_input.questions[].question.
+    /// The interactive AskUserQuestion dialog fires no Stop hook (the turn continues once
+    /// answered), and the only event carrying the actual question text is the PreToolUse hook
+    /// with tool_name "AskUserQuestion". We surface it from that hook so RAIVEN chimes/announces
+    /// the real question; the text is pulled from tool_input.questions[].question. Newer Claude
+    /// Code builds also fire a generic permission_prompt Notification for the same dialog - see
+    /// QuestionPipeline.IsDuplicateAskUserQuestionPrompt, which filters that duplicate out.
     /// </summary>
     public static bool TryParseClaudeAskUserQuestion(RaivenEvent e, out ClaudeNotificationEvent question)
     {

@@ -50,6 +50,22 @@ public class QuestionPipelineTests
         Assert.Equal(expected, QuestionPipeline.IsQuestion(type));
     }
 
+    [Theory]
+    // The permission copy of an AskUserQuestion dialog - the duplicate we drop.
+    [InlineData("permission_prompt", "Claude needs your permission to use AskUserQuestion", true)]
+    [InlineData("PERMISSION_PROMPT", "Claude needs your permission to use AskUserQuestion", true)]
+    // A real permission prompt for any other tool has no PreToolUse announcement behind it.
+    [InlineData("permission_prompt", "Claude needs your permission to use Bash", false)]
+    [InlineData("permission_prompt", "", false)]
+    // Only permission prompts are duplicates; an idle wait naming the tool is still its own event.
+    [InlineData("idle_prompt", "Claude is waiting on AskUserQuestion", false)]
+    [InlineData(null, "Claude needs your permission to use AskUserQuestion", false)]
+    public void IsDuplicateAskUserQuestionPrompt_MatchesOnlyThePermissionCopy(
+        string? type, string message, bool expected)
+    {
+        Assert.Equal(expected, QuestionPipeline.IsDuplicateAskUserQuestionPrompt(type, message));
+    }
+
     [Fact]
     public async Task AnnounceAsync_AnnounceMode_SpeaksFixedLineWithFolder()
     {

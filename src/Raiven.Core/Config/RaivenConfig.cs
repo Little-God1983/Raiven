@@ -25,6 +25,7 @@ public sealed class RaivenConfig
     public bool NotifyOnQuestion { get; set; } = true;
     public string QuestionVoice { get; set; } = "announce"; // "announce", "message" (read the hook's message), or "summary" (Claude Haiku)
     public int QuestionWordLimit { get; set; } // spoken word cap for "message" mode; 0 = unlimited
+    public bool SuppressDuplicateAskUserQuestionPrompt { get; set; } = true; // drop Claude Code's "permission to use AskUserQuestion" notification when the PreToolUse hook already announced that dialog
     public bool KeepAudioAlive { get; set; } // continuous silent stream keeps the audio device / Bluetooth link awake
     public bool ShowPlaybackStatus { get; set; } = true; // finished-turn toast stays open showing summarize/generate/speak stages
 

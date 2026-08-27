@@ -7,6 +7,11 @@ public class FileLogTests
     private static string TempLogDir() =>
         Path.Combine(Path.GetTempPath(), $"raiven-log-{Guid.NewGuid():N}");
 
+    // The prune tests deliberately do NOT call Configure: FileLog's target directory is one static
+    // shared by the whole process, so pointing it at a temp dir invites every other test class
+    // running in parallel to write today's log file into it - which is exactly what used to make
+    // these assertions flaky. They prune an explicitly named directory instead.
+
     [Fact]
     public void InfoAndError_AppendLinesToTodaysDatedFile()
     {
@@ -32,13 +37,32 @@ public class FileLogTests
         for (var day = 1; day <= 10; day++)
             File.WriteAllText(Path.Combine(dir, $"raiven-log-202601{day:D2}.log"), "x");
         File.WriteAllText(Path.Combine(dir, "raiven.log"), "legacy");
-        FileLog.Configure(dir);
 
-        FileLog.PruneOldLogs(keep: 3);
+        FileLog.PruneOldLogs(dir, keep: 3);
 
         var remaining = Directory.GetFiles(dir, "raiven-log-*.log").Select(Path.GetFileName).OrderBy(n => n).ToList();
         Assert.Equal(["raiven-log-20260108.log", "raiven-log-20260109.log", "raiven-log-20260110.log"], remaining);
         Assert.True(File.Exists(Path.Combine(dir, "raiven.log"))); // non-dated file preserved
+    }
+
+    [Fact]
+    public void PruneOldLogs_WithExplicitDirectory_IgnoresTheConfiguredOne()
+    {
+        // Guards the property the other prune tests rely on: the explicit overload reads no
+        // shared state, so a concurrently configured directory cannot leak into its result.
+        var configured = TempLogDir();
+        var target = TempLogDir();
+        Directory.CreateDirectory(target);
+        File.WriteAllText(Path.Combine(target, "raiven-log-20260101.log"), "x");
+        File.WriteAllText(Path.Combine(target, "raiven-log-20260102.log"), "x");
+        FileLog.Configure(configured);
+        File.WriteAllText(Path.Combine(configured, "raiven-log-20260101.log"), "x");
+
+        FileLog.PruneOldLogs(target, keep: 1);
+
+        Assert.Equal(["raiven-log-20260102.log"],
+            Directory.GetFiles(target, "raiven-log-*.log").Select(Path.GetFileName));
+        Assert.True(File.Exists(Path.Combine(configured, "raiven-log-20260101.log")));
     }
 
     [Fact]
@@ -48,9 +72,8 @@ public class FileLogTests
         Directory.CreateDirectory(dir);
         File.WriteAllText(Path.Combine(dir, "raiven-log-20260101.log"), "x");
         File.WriteAllText(Path.Combine(dir, "raiven-log-20260102.log"), "x");
-        FileLog.Configure(dir);
 
-        FileLog.PruneOldLogs(keep: 30);
+        FileLog.PruneOldLogs(dir, keep: 30);
 
         Assert.Equal(2, Directory.GetFiles(dir, "raiven-log-*.log").Length);
     }

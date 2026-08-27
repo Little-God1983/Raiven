@@ -32,13 +32,12 @@ public sealed class QuestionPipeline(RaivenConfig config, IClaudeClient claude, 
     /// Claude Code started permission-gating AskUserQuestion in mid-August 2026, so every dialog now
     /// also fires a generic "Claude needs your permission to use AskUserQuestion" notification a few
     /// seconds after the PreToolUse hook already delivered the real question text. Announcing both
-    /// speaks the useless line over the real question and buries its toast, so RAIVEN drops the
-    /// permission copy (see RaivenConfig.SuppressDuplicateQuestionPrompts). Permission prompts for
-    /// every other tool have no PreToolUse announcement behind them and are left alone.
+    /// speaks the useless line over the real question and buries its toast. QuestionGate drops the
+    /// permission copy, but only when that dialog really was announced. Permission prompts for every
+    /// other tool have no PreToolUse announcement behind them and are left alone.
     /// </summary>
-    public static bool IsDuplicateAskUserQuestionPrompt(string? notificationType, string? message) =>
+    public static bool IsDuplicateAskUserQuestionPrompt(string? notificationType, string message) =>
         string.Equals(notificationType, "permission_prompt", StringComparison.OrdinalIgnoreCase) &&
-        message is not null &&
         message.Contains("AskUserQuestion", StringComparison.OrdinalIgnoreCase);
 
     public async Task AnnounceAsync(ClaudeNotificationEvent evt)

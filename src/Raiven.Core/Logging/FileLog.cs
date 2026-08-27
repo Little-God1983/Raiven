@@ -12,17 +12,24 @@ public static class FileLog
         lock (Sync) { _dir = directory; }
     }
 
-    /// <summary>Keep the newest <paramref name="keep"/> daily log files, delete older ones.
-    /// Retention is by count (days RAIVEN actually ran), never by age.</summary>
+    /// <summary>Keep the newest <paramref name="keep"/> daily log files in the configured
+    /// directory, delete older ones. Retention is by count (days RAIVEN actually ran), never by age.</summary>
     public static void PruneOldLogs(int keep)
     {
         string? dir;
         lock (Sync) { dir = _dir; }
-        if (dir is null) return;
+        if (dir is not null) PruneOldLogs(dir, keep);
+    }
+
+    /// <summary>Prune an explicitly named directory. Same retention rule, but it touches none of
+    /// the shared state <see cref="Configure"/> owns - which is what makes it safe to call from
+    /// tests running in parallel with anything that logs.</summary>
+    public static void PruneOldLogs(string directory, int keep)
+    {
         try
         {
             // File names are raiven-log-YYYYMMDD.log, so name order is chronological.
-            var stale = Directory.GetFiles(dir, "raiven-log-*.log")
+            var stale = Directory.GetFiles(directory, "raiven-log-*.log")
                 .OrderByDescending(Path.GetFileName, StringComparer.Ordinal)
                 .Skip(Math.Max(0, keep));
             foreach (var file in stale)
